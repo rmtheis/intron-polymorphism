@@ -24,9 +24,14 @@ use Getopt::Long;
 ##################################
 
 # Default general parameters
-my $scripts_path = "/home/theis/intron-polymorphism/"; # Location of intron-polymorphism scripts
-my $input_path = "/home/theis/intron-polymorphism/reads/"; # Location of reads files
+my $scripts_path = "/home/theis/intron-polymorphism/"; # Location of this and other scripts
+my $input_path = "/home/theis/intron-polymorphism/bowtie-0.12.7/reads/"; # Location of reads files
+my $input_basename = "e_coli_1000"; # Base of name of reads, without extension ".1.fq" or ".2.fq"
+my $input_ref = "/home/theis/intron-polymorphism/bowtie-0.12.7/genomes/NC_008253.fna"; # Bowtie reference genome
 my $skipto = ""; # Skip to a step in the pipeline
+
+# Default tools paths
+my $bowtie_path = "/home/theis/intron-polymorphism/bowtie-0.12.7"; # Location of bowtie aligner
 
 # Parse command-line options
 GetOptions(
@@ -34,6 +39,14 @@ GetOptions(
   'k=s' => \$skipto,
   's=s' => \$scripts_path,
 );
+
+# Initialize the project
+my $project = IntronPoly->new();
+my $workdir = $project->set_workdir( $scripts_path );
+$project->set_tooldirs( $bowtie_path );
+
+# Set paths to input data
+$project->build_db();
 
 ##############################
 # JUMP TO THE REQUESTED STEP #
@@ -49,13 +62,9 @@ if ( $skipto eq "N" ) { print "Skippint to analysis\n";   goto ANALYZE; }
 # RUN THE PIPELINE #
 ####################
 
-# Initialize the project
-my $project = IntronPoly->new();
-$project->set_workdir( $scripts_path );
-
 MAP:
-#$project->set_inputdir( $input_path );
-#$project->run_mapping();
+$project->build_mapping_db($input_ref);
+$project->run_mapping($input_basename);
 
 #COLLECT:
 
