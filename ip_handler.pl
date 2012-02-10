@@ -17,54 +17,82 @@
 use strict;
 use IntronPoly;
 use Getopt::Long;
-#use IPC::System::Simple qw(capture $EXITVAL);
 
-##################################
-# CONFIGURE USER RUNTIME OPTIONS #
-##################################
+##########################################
+# CONFIGURE DEFAULT USER RUNTIME OPTIONS #
+##########################################
 
-# Default general parameters
-my $scripts_path = "/home/theis/intron-polymorphism/"; # Location of this and other scripts
-my $input_path = "/home/theis/intron-polymorphism/bowtie-0.12.7/reads/"; # Location of reads files
-my $input_basename = "e_coli_1000"; # Base of name of reads, without extension ".1.fq" or ".2.fq"
-my $input_ref = "/home/theis/intron-polymorphism/bowtie-0.12.7/genomes/NC_008253.fna"; # Bowtie reference genome
-my $skipto = ""; # Skip to a step in the pipeline
+# Skip ahead to a step in the pipeline
+my $skip_to = "";
 
-# Default tools paths
-my $bowtie_path = "/home/theis/intron-polymorphism/bowtie-0.12.7"; # Location of bowtie aligner
+# Previously used output directory name, for restarting a partially completed run 
+my $resume_work_dir = "";
 
-# Parse command-line options
+# Directory name where this script and associated scripts are located
+my $scripts_dir = "/home/theis/intron-polymorphism";
+
+# Reference genome filename (FastA format)
+my $ref_genome_filename = "/home/theis/intron-polymorphism/genomes/NC_008253.fna";
+
+# Directory where the unmapped reads are located
+my $reads_dir = "/home/theis/intron-polymorphism/reads";
+
+# Base of the unmapped reads filenames, without ".1.fq" or ".2.fq" extension (FastQ format)
+my $reads_basename = "e_coli_1000";
+
+# Directory name where the bowtie executables are located
+my $bowtie_dir = "/home/theis/intron-polymorphism/bowtie-0.12.7";
+
+# Directory name where existing bowtie index files may be located
+my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
+
+# Number of threads to use when running bowtie
+#my $bowtie_threads = 8;
+
+###########################
+# INITIALIZE THE PIPELINE #
+###########################
+
+# Parse command-line options, overriding any default options set above
 GetOptions(
-  'i=s' => \$input_path,
-  'k=s' => \$skipto,
-  's=s' => \$scripts_path,
+  'g:s' => \$ref_genome_filename,
+  'k:s' => \$skip_to,
+  'rd:s' => \$reads_dir,
+  'rb:s' => \$reads_basename,
 );
 
 # Initialize the project
 my $project = IntronPoly->new();
-my $workdir = $project->set_workdir( $scripts_path );
-$project->set_tooldirs( $bowtie_path );
 
-# Set paths to input data
-$project->build_db();
+# Create output directory
+my $work_dir = $project->set_work_dir( $scripts_dir, $resume_work_dir );
+
+# Set paths to data used throughout pipeline
+$project->build_db( $ref_genome_filename );
 
 ##############################
 # JUMP TO THE REQUESTED STEP #
 ##############################
 
-if ( $skipto eq "C" ) { print "Skipping to collecting\n"; goto COLLECT; }
-if ( $skipto eq "F" ) { print "Skipping to filtering\n";  goto FILTER; }
-if ( $skipto eq "A" ) { print "Skipping to assembly\n";   goto ASSEMBLE; }
-if ( $skipto eq "L" ) { print "Skipping to alignment\n";  goto ALIGN; }
-if ( $skipto eq "N" ) { print "Skippint to analysis\n";   goto ANALYZE; }
+if ( $skip_to eq "C" ) { print "Skipping to collecting\n"; goto COLLECT; }
+if ( $skip_to eq "F" ) { print "Skipping to filtering\n";  goto FILTER; }
+if ( $skip_to eq "A" ) { print "Skipping to assembly\n";   goto ASSEMBLE; }
+if ( $skip_to eq "L" ) { print "Skipping to alignment\n";  goto ALIGN; }
+if ( $skip_to eq "N" ) { print "Skippint to analysis\n";   goto ANALYZE; }
 
 ####################
 # RUN THE PIPELINE #
 ####################
 
 MAP:
-$project->build_mapping_db($input_ref);
-$project->run_mapping($input_basename);
+$project->mapping_setup(
+  $bowtie_dir,
+  $bowtie_index_dir,
+  $reads_dir,
+  $reads_basename,
+);
+$project->build_mapping_index();
+$project->run_mapping();
 
 #COLLECT:
 

@@ -17,18 +17,17 @@
 package IntronPoly;
 
 use strict;
-#use Bio::Tools;
+use Bio::Tools::GuessSeqFormat;
 use File::Basename;
-#use IPC::System::Simple qw(capture $EXITVAL);
+use IPC::System::Simple qw(capture $EXITVAL);
 
 =head2 new
 
  Title   : new
  Usage   : $project = IntronPoly->new()
  Function: Initializes a new intron polymorphism analysis project
- Example : $project = IntronPoly->new();
-           $project->set_workdir("/home/theis/work");
-           
+ Example : $project = IntronPoly->new()
+           $project->set_work_dir( "/home/theis/work" )
  Returns : IntronPoly project object
  Args    : None
 
@@ -36,115 +35,217 @@ use File::Basename;
 
 sub new {
   my $self = {};
-  $self->{"workdir"} = undef; # working directory
-  $self->{"outputdir"} = undef; # output directory
-  $self->{"toolpaths"} = undef; # hash of paths to tool directories
-  $self->{"db"} = undef; # hash of text file data directories
+  $self->{"work_dir"} = undef; # Scalar path to work directory
+  $self->{"ref_genome"} = undef; # Hash of reference genome related values
+  $self->{"bowtie_db"} = undef; # Hash of data directories for bowtie
   bless($self);
   return $self;
 }
 
-sub set_workdir {
+=head2 set_work_dir
+
+ Title   : set_work_dir
+ Usage:  : $project->set_work_dir( "path_to_scripts" , "" )
+ Function: Creates directory for pipeline working data and output files
+ Example : my $work_dir = "/home/theis/work";
+           my $resume_dir = "";
+           $project->set_work_dir( $scripts_dir, $resume_dir )
+ Returns : The path to the directory for pipeline working data and output files
+ Args    : Scalar of full path to the parent directory of the work directory, and a scalar of 
+           full path to work folder from a previous run (or containing existing unmapped reads)
+
+=cut
+
+sub set_work_dir {
   my $self = shift;
-  my $path = shift;
-
-  # Ensure path has a trailing slash
-  unless ( $path =~ m/\/$/ ) { $path = $path . '/'; }
-
-  # Set the working directory
-  my $outputdir = $path . &datestamp . "_output";
-  $self->{"workdir"} = $path;
-  $self->{"outputdir"} = $outputdir;
-  &makedir( $outputdir );
-  print "Setting working directory to $path\n";
-  print "Created output directory $outputdir\n";
-  return $self->{"workdir"};
+  my $scripts_dir = shift;
+  my $work_dir = shift || "$scripts_dir/run-" . &datestamp;
+  unless (-e $work_dir) {  
+    $work_dir = $1 if ($work_dir =~ /(.*)\/$/);
+    &make_dir( $work_dir );
+    print "Created work directory $work_dir\n"
+  } else {
+    $work_dir = &check_dir( $work_dir );
+    print "Using existing work directory $work_dir\n";
+  }
+  $self->{"work_dir"} = $work_dir;
+  return $work_dir;
 }
 
-sub set_tooldirs {
-  my $self = shift;
-  my $path = shift;
+=head2 build_db
 
-  # Set the path to bowtie
-  $self->{"toolpaths"}->{"bowtie"} = $path;
-}
+ Title   : build_db
+ Usage   :
+ Function:
+ Example : 
+ Returns : 
+ Args    :
+
+=cut
 
 sub build_db {
   my $self = shift;
-  my $workdir = $self->{"workdir"};
-  $self->{"db"} = {
-                   # Path to Bowtie database created by bowtie-build
-                   bowtiedb => $workdir . "/bowtie-db/",
-                   # Base name of reference genome for bowtie
-                   bowtie_ref_base => undef,
-                   # Path to reads for mapping step
-                   reads => $workdir . "/reads/",
-                  };
-}
+  my $ref_genome_filename = shift;
 
-sub build_mapping_db {
+  # Split reference genome pathname into components
+  my ($file, $dir, $ext) = fileparse($ref_genome_filename, qr/\.[^.]*/);
+  $self->{"ref_genome"}->{"full_pathname"} = $ref_genome_filename;
+  $self->{"ref_genome"}->{"basename"} = $file;
+  $self->{"ref_genome"}->{"dir"} = $dir;
+};
+
+=head2 mapping_setup
+
+ Title   : mapping_setup
+ Usage   :
+ Function:
+ Example : 
+ Returns : 
+ Args    :
+
+=cut
+
+sub mapping_setup {
   my $self = shift;
-  my $input_ref = shift;
-  my $workdir = $self->{"workdir"};
-  my $bowtie_path = $self->{"toolpaths"}->{"bowtie"};
-  my $bowtie_db = $self->{"db"}->{"bowtiedb"};
+  my $bowtie_dir = shift;
+  my $bowtie_index_dir = shift;
+  my $reads_dir = shift;
+  my $reads_basename = shift;
+  my $work_dir = $self->{"work_dir"};
 
-  # Get the base name, without extension, of the reference genome
-  my ($ref_file, $ref_dir, $ref_ext) = fileparse($input_ref, qr/\.[^.]*/);
-  $self->{"db"}->{"bowtie_ref_base"} = $ref_file;
-
-  # TODO change this to check for actual ref file name in db dir, not just any files
-  unless (-e "$bowtie_db/$ref_file.1.ebwt") {
-    unless (-d $bowtie_db) { &makedir($bowtie_db); }
-
-    print "bowtie database will be created in " . $bowtie_db . "\n";
-    system("$bowtie_path/bowtie-build $input_ref $bowtie_db/$ref_file");
-
-    # TODO check exit val
-
-  } else {
-    print "bowtie database already exists in $bowtie_db/$ref_file.*, not re-creating.\n";
+  # Ensure reference genome appears to be FastA format
+  my $ref_genome = $self->{"ref_genome"}->{"full_pathname"};
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $ref_genome_dir = $self->{"ref_genome"}->{"dir"};
+  unless (-d $ref_genome_dir) {
+    die "$0: reference genome directory $ref_genome_dir does not exist" ;
+  }
+  my $guesser = Bio::Tools::GuessSeqFormat->new();
+  $guesser->file( $ref_genome );
+  my $format = $guesser->guess;
+  if ($format ne "fasta") {
+    die "$0: reference genome $ref_genome does not appear to be a valid FastA file";
   }
 
+  # Ensure that reads files exist (but don't verify format--GuessSeqFormat can't get it right)
+  $reads_dir = $1 if ($reads_dir =~ /(.*)\/$/);
+  my $reads_file_one = "$reads_dir/$reads_basename.1.fq";
+  my $reads_file_two = "$reads_dir/$reads_basename.2.fq";
+  unless (-e $reads_file_one) {
+    die "$0: reads file $reads_file_one does not exist";
+  }
+  unless (-e $reads_file_two) {
+    die "$0: reads file $reads_file_two does not exist";
+  }
+
+  # TODO Ensure number of reads in pair matches between file 1 and 2
+
+  # Create directory for bowtie index files if necessary
+  $bowtie_index_dir = $1 if ($bowtie_index_dir =~ /(.*)\/$/);
+  unless (-d $bowtie_index_dir) {
+    &make_dir( $bowtie_index_dir );
+  }
+
+  # Remember paths needed for running bowtie
+  $self->{"bowtie_db"} = {
+                          bowtie_dir => $bowtie_dir,
+                          bowtie_index_dir => $bowtie_index_dir,
+                          reads_file_one => $reads_file_one,
+                          reads_file_two => $reads_file_two
+                         };
+  print "Using reference genome $ref_genome\n";
+  print "Using reads file 1: $reads_file_one\n";
+  print "Using reads file 2: $reads_file_two\n";
 }
 
+=head2 build_mapping_index
+
+ Title   : build_mapping_index
+ Usage   :
+ Function:
+ Example : 
+ Returns : 
+ Args    :
+
+=cut
+
+sub build_mapping_index {
+  my $self = shift;
+  my $ref_genome = $self->{"ref_genome"}->{"full_pathname"};
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $bowtie_dir = $self->{"bowtie_db"}->{"bowtie_dir"};
+  my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  unless (-e "$bowtie_index_dir/$ref_genome_basename.1.ebwt" &&
+             "$bowtie_index_dir/$ref_genome_basename.2.ebwt" &&
+             "$bowtie_index_dir/$ref_genome_basename.3.ebwt" &&
+             "$bowtie_index_dir/$ref_genome_basename.4.ebwt" &&
+             "$bowtie_index_dir/$ref_genome_basename.rev.1.ebwt" &&
+             "$bowtie_index_dir/$ref_genome_basename.rev.2.ebwt") {
+    # Call bowtie-build to create the bowtie index
+    print "Creating bowtie index in $bowtie_index_dir...";
+    my $results = capture( "$bowtie_dir/bowtie-build " .
+                           "$ref_genome $bowtie_index_dir/$ref_genome_basename" );
+    if ( $EXITVAL != 0 ) {
+      die "$0: bowtie-build exited unsuccessful";
+    }
+    print "finished.\n";
+  } else {
+    print "Bowtie index already exists, not re-creating.\n";
+  }
+}
+
+=head2 run_mapping
+
+ Title   : run_mapping
+ Usage   : 
+ Function: 
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+ 
 sub run_mapping {
   my $self = shift;
-  my $input_base = shift;
-  my $input = $self->{"db"}->{"reads"};
-  my $bowtie_db = $self->{"db"}->{"bowtiedb"};
-  my $bowtie_path = $self->{"toolpaths"}->{"bowtie"};
-  my $bowtie_ref_base = $self->{"db"}->{"bowtie_ref_base"};
+#  my $threads = shift; # Note can't use mult threads with --refout
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $bowtie_dir = $self->{"bowtie_db"}->{"bowtie_dir"};
+  my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  my $reads_file_one = $self->{"bowtie_db"}->{"reads_file_one"};
+  my $reads_file_two = $self->{"bowtie_db"}->{"reads_file_two"};
+  my $work_dir = $self->{"work_dir"};
+  print "Running mapping using bowtie...\n";
 
-  print "bowtie path is $bowtie_path\n";
-  print "input base is $input_base\n";
+  # Call bowtie to run the mapping
+  my $results = capture( "$bowtie_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
+                         "-1 $reads_file_one -2 $reads_file_two " .
+                         "--al $work_dir/aligned --un $work_dir/unaligned --refout"
+                       );
 
-  system("$bowtie_path/bowtie $bowtie_db/$bowtie_ref_base -1 $input/$input_base.1.fq -2 $input/$input_base.2.fq" );
-
-  #if( $EXITVAL != 0 ) {
-  #  warn("Error running mapping\n");
-  #  exit(0);
-  #}
+  if( $EXITVAL != 0 ) {
+    die "$0: bowtie exited unsuccessful";
+  }
+  print "Bowtie finished.\n";
 }
+
 
 ###################################################################################
 
-# Returns 1 if the given folder is empty, and creates it if it does not exist
-sub is_folder_empty {
-    my $dirname = shift;
-    unless (-d $dirname) {
-      # Create the folder
-      &makedir($dirname);
-      return 1;
-    }
-    opendir(my $dh, $dirname) or die "$dirname: $!";
-    return scalar(grep { $_ ne "." && $_ ne ".." } readdir($dh)) == 0;
+# Checks if the given folder exists, and removes trailing slash from string
+sub check_dir {
+  my $dir = shift;
+  if (-d $dir) {
+    $dir = $1 if ($dir =~ /(.*)\/$/);
+    return $dir;
+  } else {
+    die("$0: directory $dir does not exist");
+  }
 }
 
 # Creates the given directory, and gives an error message on failure
-sub makedir {
+sub make_dir {
   my( $dirname ) = @_;
-  mkdir $dirname, 0755 || die "$0: could not create $dirname\n";
+  mkdir $dirname, 0755 || die "$0: could not create $dirname";
 }
 
 # Returns a date/time string with no whitespace
