@@ -139,6 +139,8 @@ sub mapping_setup {
   }
 
   # TODO Ensure number of reads in pair matches between file 1 and 2
+  # TODO Remember the number of reads we start with, for later analysis
+  # TODO Ensure that read IDs are unique?
 
   # Create directory for bowtie index files if necessary
   $bowtie_index_dir = $1 if ($bowtie_index_dir =~ /(.*)\/$/);
@@ -207,27 +209,76 @@ sub build_mapping_index {
  
 sub run_mapping {
   my $self = shift;
-#  my $threads = shift; # Note can't use mult threads with --refout
+  my $num_threads = shift;
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $bowtie_dir = $self->{"bowtie_db"}->{"bowtie_dir"};
   my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   my $reads_file_one = $self->{"bowtie_db"}->{"reads_file_one"};
   my $reads_file_two = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir = $self->{"work_dir"};
-  print "Running mapping using bowtie...\n";
+  print "Running mapping using bowtie, using $num_threads threads...\n";
 
   # Call bowtie to run the mapping
+  # TODO trim3
   my $results = capture( "$bowtie_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
+                         "--threads $num_threads --suppress 3,6 --time " .
+                         "--un $work_dir/unaligned " . 
                          "-1 $reads_file_one -2 $reads_file_two " .
-                         "--al $work_dir/aligned --un $work_dir/unaligned --refout"
+                         "--al $work_dir/aligned " .
+                         "$work_dir/hits.map"
                        );
 
   if( $EXITVAL != 0 ) {
     die "$0: bowtie exited unsuccessful";
   }
   print "Bowtie finished.\n";
+
+  # Sort aligning reads by match position
+  #print "Sorting aligned reads by hit position...";
+  #$results = capture( "sort -k 3,3 --sort=n $work_dir/hits.map -o $work_dir/hits_sorted.map" );
+  #if( $EXITVAL != 0 ) {
+  #  die "$0: sort exited unsuccessful";
+  #}
+  #print "finished.\n";
 }
 
+=head2 collect_half_mapping_pairs
+
+ Title   : 
+ Usage   : 
+ Function: 
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
+sub collect_half_mapping_pairs {
+  my $self = shift;
+  my $num_threads = shift;
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $bowtie_dir = $self->{"bowtie_db"}->{"bowtie_dir"};
+  my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  my $work_dir = $self->{"work_dir"};
+
+
+  print "Running bowtie to identify half-mapping pairs...";
+  my $results = capture( "$bowtie_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
+                         "--threads $num_threads --suppress 3,6 --time " .
+                         "$work_dir/unaligned_1 --al $work_dir/collect1_halfmapping.1.fq " #. 
+                         #"--un $work_dir/collect1_unaligned .
+                         #"$work_dir/collect1_hits.map"
+                       );
+
+  $results = capture( "$bowtie_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
+                         "--threads $num_threads --suppress 3,6 --time " .
+                         "$work_dir/unaligned_2 --al $work_dir/collect2_halfmapping.2.fq " #. 
+                         #"--un $work_dir/collect2_unaligned " . 
+                         #"$work_dir/collect2_hits.map"
+                       );
+  system("touch $work_dir/collect1_halfmapping.2.fq");
+  system("touch $work_dir/collect2_halfmapping.1.fq");
+}
 
 ###################################################################################
 

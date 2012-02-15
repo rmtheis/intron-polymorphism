@@ -38,7 +38,7 @@ my $ref_genome_filename = "/home/theis/intron-polymorphism/genomes/NC_008253.fna
 my $reads_dir = "/home/theis/intron-polymorphism/reads";
 
 # Base of the unmapped reads filenames, without ".1.fq" or ".2.fq" extension (FastQ format)
-my $reads_basename = "e_coli_1000";
+my $reads_basename = "testData";
 
 # Directory name where the bowtie executables are located
 my $bowtie_dir = "/home/theis/intron-polymorphism/bowtie-0.12.7";
@@ -47,7 +47,7 @@ my $bowtie_dir = "/home/theis/intron-polymorphism/bowtie-0.12.7";
 my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
 
 # Number of threads to use when running bowtie
-#my $bowtie_threads = 8;
+my $bowtie_num_threads = 8;
 
 ###########################
 # INITIALIZE THE PIPELINE #
@@ -59,6 +59,7 @@ GetOptions(
   'k:s' => \$skip_to,
   'rd:s' => \$reads_dir,
   'rb:s' => \$reads_basename,
+  't:s' => \$bowtie_num_threads,
 );
 
 # Initialize the project
@@ -92,21 +93,21 @@ $project->mapping_setup(
   $reads_basename,
 );
 $project->build_mapping_index();
-$project->run_mapping();
+$project->run_mapping( $bowtie_num_threads );
+$project->collect_half_mapping_pairs( $bowtie_num_threads );
 
-#COLLECT:
+COLLECT: # find half mapping mates that are close to one another
 
-
-#FILTER:
-
-
-#ASSEMBLE:
+FILTER:
 
 
-#ALIGN:
+ASSEMBLE:
 
 
-#ANALYZE:
+ALIGN:
 
 
+ANALYZE:
 
+
+exit;
