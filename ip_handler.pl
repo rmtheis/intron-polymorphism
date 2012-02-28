@@ -17,6 +17,7 @@
 use strict;
 use IntronPoly;
 use Getopt::Long;
+use Sys::CPU;
 
 ##########################################
 # CONFIGURE DEFAULT USER RUNTIME OPTIONS #
@@ -25,20 +26,22 @@ use Getopt::Long;
 # Skip ahead to a step in the pipeline
 my $skip_to = "";
 
-# Previously used output directory name, for restarting a partially completed run 
-my $resume_work_dir = "";
-
 # Directory name where this script and associated scripts are located
 my $scripts_dir = "/home/theis/intron-polymorphism";
 
 # Reference genome filename (FastA format)
 my $ref_genome_filename = "/home/theis/intron-polymorphism/genomes/NC_008253.fna";
 
+# Previously used output directory name, for restarting a partially completed run 
+# Leave this option empty ("") to start a new run of the pipeline
+my $resume_work_dir = "";
+
 # Directory where the unmapped reads are located
 my $reads_dir = "/home/theis/intron-polymorphism/reads";
 
 # Base of the unmapped reads filenames, without ".1.fq" or ".2.fq" extension (FastQ format)
-my $reads_basename = "testData";
+# This base filename will be used for all data subsequently generated from these reads.
+my $data_basename = "testData";
 
 # Directory name where the bowtie executables are located
 my $bowtie_dir = "/home/theis/intron-polymorphism/bowtie-0.12.7";
@@ -47,7 +50,16 @@ my $bowtie_dir = "/home/theis/intron-polymorphism/bowtie-0.12.7";
 my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
 
 # Number of threads to use when running bowtie
-my $bowtie_num_threads = 8;
+my $bowtie_num_threads = Sys::CPU::cpu_count();
+
+# Check for invalid input
+if ($resume_work_dir ne "" && $reads_dir ne "") {
+  print "Error: cannot specify both resume_work_dir and reads_dir. Set one to empty string.\n";
+  exit;
+}
+if ($data_basename eq "") {
+  print "Error: data_basename not initialized. Set a value for data_basename.\n";
+}
 
 ###########################
 # INITIALIZE THE PIPELINE #
@@ -55,10 +67,10 @@ my $bowtie_num_threads = 8;
 
 # Parse command-line options, overriding any default options set above
 GetOptions(
+  'b:s' => \$data_basename,
   'g:s' => \$ref_genome_filename,
   'k:s' => \$skip_to,
   'rd:s' => \$reads_dir,
-  'rb:s' => \$reads_basename,
   't:s' => \$bowtie_num_threads,
 );
 
@@ -69,45 +81,70 @@ my $project = IntronPoly->new();
 my $work_dir = $project->set_work_dir( $scripts_dir, $resume_work_dir );
 
 # Set paths to data used throughout pipeline
-$project->build_db( $ref_genome_filename );
+$project->build_db( $ref_genome_filename, $data_basename );
+
+# Track whether mapping-related parameters have been set
+my $mapping_setup_completed = 0;
 
 ##############################
 # JUMP TO THE REQUESTED STEP #
 ##############################
 
-if ( $skip_to eq "C" ) { print "Skipping to collecting\n"; goto COLLECT; }
-if ( $skip_to eq "F" ) { print "Skipping to filtering\n";  goto FILTER; }
-if ( $skip_to eq "A" ) { print "Skipping to assembly\n";   goto ASSEMBLE; }
-if ( $skip_to eq "L" ) { print "Skipping to alignment\n";  goto ALIGN; }
-if ( $skip_to eq "N" ) { print "Skippint to analysis\n";   goto ANALYZE; }
+if ( $skip_to eq "C" ) { print "Skipping to collecting\n"; goto COLLECTION; }
+if ( $skip_to eq "F" ) { print "Skipping to filtering\n";  goto FILTERING; }
+if ( $skip_to eq "A" ) { print "Skipping to assembly\n";   goto ASSEMBLY; }
+if ( $skip_to eq "L" ) { print "Skipping to alignment\n";  goto ALIGNMENT; }
+if ( $skip_to eq "N" ) { print "Skippint to analysis\n";   goto ANALYSIS; }
 
 ####################
 # RUN THE PIPELINE #
 ####################
 
-MAP:
+MAPPING:
+print "Running MAPPING...\n";
+
+# Set mapping-related parameters
 $project->mapping_setup(
   $bowtie_dir,
   $bowtie_index_dir,
   $reads_dir,
-  $reads_basename,
+  $data_basename,
 );
+$mapping_setup_completed = 1;
+
+# Build the index required for Bowtie to run
 $project->build_mapping_index();
+
+# Map the reads to the reference genome to identify unaligning pairs
 $project->run_mapping( $bowtie_num_threads );
-$project->collect_half_mapping_pairs( $bowtie_num_threads );
 
-COLLECT: # find half mapping mates that are close to one another
+COLLECTION:
+print "Running COLLECTION...\n";
 
-FILTER:
+# Ensure mapping-related parameters are set, in case we skipped to this step
+if ($mapping_setup_completed != 1) {
+  $project->mapping_setup(
+    $bowtie_dir,
+    $bowtie_index_dir,
+    $reads_dir,
+    $data_basename,
+  );
+}
+
+# Identify all the half-mapping read pairs
+$project->identify_half_mapping_pairs( $data_basename, $bowtie_num_threads );
 
 
-ASSEMBLE:
+FILTERING:
+print "Running FILTERING...\n";
+
+#ASSEMBLY:
 
 
-ALIGN:
+#ALIGNMENT:
 
 
-ANALYZE:
+#ANALYSIS:
 
 
 exit;
