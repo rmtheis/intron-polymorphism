@@ -115,7 +115,8 @@ sub build_db {
 
 sub mapping_setup {
   my $self = shift;
-  my $bowtie_dir = shift;
+  my $bowtie1_dir = shift;
+  my $bowtie2_dir = shift;
   my $bowtie_index_dir = shift;
   my $reads_dir = shift;
   my $data_basename = shift;
@@ -161,7 +162,8 @@ sub mapping_setup {
 
   # Remember paths needed for running bowtie
   $self->{"bowtie_db"} = {
-                          bowtie_dir => $bowtie_dir,
+                          bowtie1_dir => $bowtie1_dir,
+                          bowtie2_dir => $bowtie2_dir,
                           bowtie_index_dir => $bowtie_index_dir,
                           reads_file_one => $reads_file_one,
                           reads_file_two => $reads_file_two
@@ -171,9 +173,9 @@ sub mapping_setup {
   print "Using reads file 2: $reads_file_two\n";
 }
 
-=head2 build_mapping_index
+=head2 build_bowtie1_index
 
- Title   : build_mapping_index
+ Title   : build_bowtie1_index
  Usage   :
  Function:
  Example : 
@@ -182,11 +184,11 @@ sub mapping_setup {
 
 =cut
 
-sub build_mapping_index {
+sub build_bowtie1_index {
   my $self = shift;
   my $ref_genome = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie_dir = $self->{"bowtie_db"}->{"bowtie_dir"};
+  my $bowtie1_dir = $self->{"bowtie_db"}->{"bowtie1_dir"};
   my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   unless (-e "$bowtie_index_dir/$ref_genome_basename.1.ebwt" &&
              "$bowtie_index_dir/$ref_genome_basename.2.ebwt" &&
@@ -196,21 +198,58 @@ sub build_mapping_index {
              "$bowtie_index_dir/$ref_genome_basename.rev.2.ebwt") {
     # Call bowtie-build to create the bowtie index
     print "Creating bowtie index in $bowtie_index_dir...";
-    my $results = capture( "$bowtie_dir/bowtie-build " .
+    my $results = capture( "$bowtie1_dir/bowtie-build " .
                            "$ref_genome $bowtie_index_dir/$ref_genome_basename" );
     if ( $EXITVAL != 0 ) {
       die "$0: bowtie-build exited unsuccessful";
     }
     print "finished.\n";
   } else {
-    print "Bowtie index already exists, not re-creating.\n";
-    print "Using Bowtie index at $bowtie_index_dir/$ref_genome_basename.*\n";
+    print "Bowtie1 index already exists, not re-creating.\n";
+    print "Using Bowtie1 index at $bowtie_index_dir/$ref_genome_basename.*\n";
   }
 }
 
-=head2 run_mapping
+=head2 build_bowtie2_index
 
- Title   : run_mapping
+ Title   : build_bowtie2_index
+ Usage   :
+ Function:
+ Example :
+ Returns :
+ Args    :
+
+=cut
+
+sub build_bowtie2_index {
+  my $self = shift;
+  my $ref_genome = $self->{"ref_genome"}->{"full_pathname"};
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $bowtie2_dir = $self->{"bowtie_db"}->{"bowtie2_dir"};
+  my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  unless (-e "$bowtie_index_dir/$ref_genome_basename.1.bt2" &&
+             "$bowtie_index_dir/$ref_genome_basename.2.bt2" &&
+             "$bowtie_index_dir/$ref_genome_basename.3.bt2" &&
+             "$bowtie_index_dir/$ref_genome_basename.4.bt2" &&
+             "$bowtie_index_dir/$ref_genome_basename.rev.1.bt2" &&
+             "$bowtie_index_dir/$ref_genome_basename.rev.2.bt2") {
+    # Call bowtie-build to create the bowtie index
+    print "Creating bowtie index in $bowtie_index_dir...";
+    my $results = capture( "$bowtie2_dir/bowtie2-build " .
+                           "$ref_genome $bowtie_index_dir/$ref_genome_basename" );
+    if ( $EXITVAL != 0 ) {
+      die "$0: bowtie2-build exited unsuccessful";
+    }
+    print "finished.\n";
+  } else {
+    print "Bowtie2 index already exists, not re-creating.\n";
+    print "Using Bowtie2 index at $bowtie_index_dir/$ref_genome_basename.*\n";
+  }
+}
+
+=head2 run_bowtie1_mapping
+
+ Title   : run_bowtie1_mapping
  Usage   : 
  Function: 
  Example : 
@@ -219,20 +258,20 @@ sub build_mapping_index {
 
 =cut
  
-sub run_mapping {
+sub run_bowtie1_mapping {
   my $self = shift;
   my $num_threads = shift;
   my $data_basename = $self->{"data_basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie_dir = $self->{"bowtie_db"}->{"bowtie_dir"};
+  my $bowtie1_dir = $self->{"bowtie_db"}->{"bowtie1_dir"};
   my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   my $reads_file_one = $self->{"bowtie_db"}->{"reads_file_one"};
   my $reads_file_two = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir = $self->{"work_dir"};
-  print "Running mapping using bowtie, using $num_threads threads...\n";
+  print "Running mapping using bowtie1, using $num_threads threads...\n";
 
   # Call bowtie to run the mapping
-  my $results = capture( "$bowtie_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
+  my $results = capture( "$bowtie1_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
                          "--threads $num_threads --suppress 3,6 --time " .
                          "--un $work_dir/${data_basename}_unaligned " . 
                          "-m 1 -1 $reads_file_one -2 $reads_file_two " .
@@ -241,9 +280,9 @@ sub run_mapping {
                        );
 
   if( $EXITVAL != 0 ) {
-    die "$0: bowtie exited unsuccessful";
+    die "$0: bowtie1 exited unsuccessful";
   }
-  print "Bowtie finished.\n";
+  print "Bowtie1 finished.\n";
 
   # Sort aligning reads by match position
   #print "Sorting aligned reads by hit position...";
@@ -254,9 +293,9 @@ sub run_mapping {
   #print "finished.\n";
 }
 
-=head2 collect_half_mapping_pairs
+=head2 run_bowtie2_mapping
 
- Title   : 
+ Title   : run_bowtie2_mapping
  Usage   : 
  Function: 
  Example : 
@@ -265,18 +304,57 @@ sub run_mapping {
 
 =cut
 
-sub identify_half_mapping_pairs {
+sub run_bowtie2_mapping {
+  my $self = shift;
+  my $num_threads = shift;
+  my $data_basename = $self->{"data_basename"};
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $bowtie2_dir = $self->{"bowtie_db"}->{"bowtie2_dir"};
+  my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  my $reads_file_one = $self->{"bowtie_db"}->{"reads_file_one"};
+  my $reads_file_two = $self->{"bowtie_db"}->{"reads_file_two"};
+  my $work_dir = $self->{"work_dir"};
+  print "Running mapping using bowtie2, using $num_threads threads...\n";
+
+  # Call bowtie to run the mapping
+  my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
+                         "--threads $num_threads --time " .
+                         "--un-conc $work_dir/${data_basename}_un-conc.%.fq " .
+                         "-M 0 -1 $reads_file_one -2 $reads_file_two " .
+                         "--al-conc $work_dir/${data_basename}_al-conc.%.fq " .
+                         "> $work_dir/${data_basename}_hits.map"
+                       );
+
+  if( $EXITVAL != 0 ) {
+    die "$0: bowtie2 exited unsuccessful";
+  }
+  print "Bowtie2 finished.\n";
+
+}
+
+=head2 bowtie1_identify
+
+ Title   : bowtie1_identify
+ Usage   : 
+ Function: Identifies the half-mapping pairs
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
+sub bowtie1_identify {
   my $self = shift;
   my $data_basename = shift;
   my $num_threads = shift;
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie_dir = $self->{"bowtie_db"}->{"bowtie_dir"};
+  my $bowtie1_dir = $self->{"bowtie_db"}->{"bowtie1_dir"};
   my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   my $work_dir = $self->{"work_dir"};
 
   # Identify the half-mapping pairs
   print "Running bowtie to identify half-mapping pairs...\n";
-  my $results = capture( "$bowtie_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
+  my $results = capture( "$bowtie1_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
                          "--threads $num_threads --suppress 3,6 --time " .
                          "-m 1 $work_dir/${data_basename}_unaligned_1 " . 
                          "--al $work_dir/${data_basename}_1_halfmapping.1.fq " . 
@@ -284,7 +362,7 @@ sub identify_half_mapping_pairs {
                          "$work_dir/${data_basename}_mate1_hits.map"
                        );
 
-  $results = capture( "$bowtie_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
+  $results = capture( "$bowtie1_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
                          "--threads $num_threads --suppress 3,6 --time " .
                          "-m 1 $work_dir/${data_basename}_unaligned_2 " . 
                          "--al $work_dir/${data_basename}_2_halfmapping.2.fq " . 
@@ -329,6 +407,50 @@ sub identify_half_mapping_pairs {
   print "Half-mapping pairs are saved:\n";
   print "Created $work_dir/${data_basename}_halfmapping.1.fq\n";
   print "Created $work_dir/${data_basename}_halfmapping.2.fq\n";
+}
+
+=head2 bowtie2_identify
+
+ Title   : bowtie2_identify
+ Usage   : 
+ Function: Identifies the half-mapping pairs
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
+sub bowtie2_identify {
+  my $self = shift;
+  my $data_basename = shift;
+  my $work_dir = $self->{"work_dir"};
+
+  print "Identifying half-mapping pairs from bowtie output...\n";
+  my $results = capture( "cut -f 1,2,4,10,11 $work_dir/${data_basename}_hits.map " .
+          "> $work_dir/${data_basename}_subset.map" );
+  if( $EXITVAL != 0 ) {
+    die "$0: cut exited unsuccessful";
+  }
+
+  # Filter mates with flag sums of 69 or 165
+  my $ifh = new IO::File("$work_dir/${data_basename}_subset.map", 'r') 
+          or die "Can't open $work_dir/${data_basename}_subset.map: $!";
+  my $ofh1 = IO::File->new("$work_dir/${data_basename}_halfmapping.1", "w") 
+          or die "Can't create $work_dir/${data_basename}_halfmapping.1: $!";
+  my $ofh2 = IO::File->new("$work_dir/${data_basename}_halfmapping.2", "w")
+          or die "Can't create $work_dir/${data_basename}_halfmapping.2: $!";
+  while( my $line = $ifh->getline ) {
+    if ( $line =~ m/^\S+\s(\d+).*/ ) {
+      my $flag_sum = $1;
+      if( $flag_sum == 69 ) {
+        print $ofh1 $line;
+      }
+      if( $flag_sum == 165 ) {
+        print $ofh2 $line;
+      }
+    }
+
+  }
 }
 
 ############ Subroutines for internal use by this module ############
