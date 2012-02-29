@@ -36,6 +36,7 @@ use IPC::System::Simple qw(capture $EXITVAL);
 
 sub new {
   my $self = {};
+  $self->{"scripts_dir"} = undef; # Scalar path to scripts directory
   $self->{"work_dir"} = undef; # Scalar path to work directory
   $self->{"data_basename"} = undef; # Scalar base filename for reads/data
   $self->{"ref_genome"} = undef; # Hash of reference genome related values
@@ -61,6 +62,7 @@ sub new {
 sub set_work_dir {
   my $self = shift;
   my $scripts_dir = shift;
+  $self->{"scripts_dir"} = $scripts_dir;
   my $work_dir = shift || "$scripts_dir/run-" . &_datestamp;
   unless (-e $work_dir) {  
     $work_dir = $1 if ($work_dir =~ /(.*)\/$/);
@@ -117,6 +119,7 @@ sub mapping_setup {
   my $bowtie_index_dir = shift;
   my $reads_dir = shift;
   my $data_basename = shift;
+  my $scripts_dir = $self->{"scripts_dir"};
   my $work_dir = $self->{"work_dir"};
 
   # Ensure reference genome appears to be FastA format
@@ -133,7 +136,7 @@ sub mapping_setup {
     die "$0: reference genome $ref_genome does not appear to be a valid FastA file";
   }
 
-  # Ensure that reads files exist (but don't verify format--GuessSeqFormat can't get it right)
+  # Ensure that reads files exist
   $reads_dir = $1 if ($reads_dir =~ /(.*)\/$/);
   my $reads_file_one = "$reads_dir/$data_basename.1.fq";
   my $reads_file_two = "$reads_dir/$data_basename.2.fq";
@@ -142,6 +145,12 @@ sub mapping_setup {
   }
   unless (-e $reads_file_two) {
     die "$0: reads file $reads_file_two does not exist";
+  }
+
+  # Perform basic validation on reads files
+  my $results = capture ( "$scripts_dir/validate_fastq.pl -i $reads_dir/$data_basename" );
+  if ( $EXITVAL != 0 ) {
+    die "$0: validate_fastq.pl exited unsuccessful";
   }
 
   # Create directory for bowtie index files if necessary
@@ -298,13 +307,13 @@ sub identify_half_mapping_pairs {
           "$work_dir/${data_basename}_halfmapping.1.fq_unsorted.tmp" );
   unlink "$work_dir/${data_basename}_1_halfmapping.1.fq" 
           or die "Can't delete $work_dir/${data_basename}_1_halfmapping.1.fq: $!";
-  unlink "$work_dir/${data_basename}_2_halfmapping.1.fq"
-          or die "Can't delete $work_dir/${data_basename}_2_halfmapping.1.fq: $!";
+#  unlink "$work_dir/${data_basename}_2_halfmapping.1.fq"
+#          or die "Can't delete $work_dir/${data_basename}_2_halfmapping.1.fq: $!";
   system( "cat $work_dir/${data_basename}_1_halfmapping.2.fq " .
           "$work_dir/${data_basename}_2_halfmapping.2.fq > " .
           "$work_dir/${data_basename}_halfmapping.2.fq_unsorted.tmp" );
-  unlink "$work_dir/${data_basename}_1_halfmapping.2.fq"
-          or die "Can't delete $work_dir/${data_basename}_1_halfmapping.2.fq: $!";
+#  unlink "$work_dir/${data_basename}_1_halfmapping.2.fq"
+#          or die "Can't delete $work_dir/${data_basename}_1_halfmapping.2.fq: $!";
   unlink "$work_dir/${data_basename}_2_halfmapping.2.fq"
           or die "Can't delete $work_dir/${data_basename}_2_halfmapping.2.fq: $!";
 
