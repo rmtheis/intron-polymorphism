@@ -30,7 +30,7 @@ my $skip_to = "";
 my $scripts_dir = "/home/theis/intron-polymorphism";
 
 # Reference genome filename (FastA format)
-my $ref_genome_filename = "/home/theis/intron-polymorphism/genomes/NC_008253.fna";
+my $ref_genome_filename = "/home/theis/intron-polymorphism/genomes/testGenome.fna";
 
 # Previously used output directory name, for restarting a partially completed run 
 # Leave this option empty ("") to start a new run of the pipeline
@@ -137,11 +137,12 @@ if ($mapping_setup_completed != 1) {
 }
 
 # Identify all the half-mapping read pairs
-#$project->bowtie1_identify( $data_basename, $bowtie_num_threads );
-$project->bowtie2_identify( $data_basename, $bowtie_num_threads );
+#$project->bowtie1_identify( $bowtie_num_threads );
+$project->bowtie2_identify( $bowtie_num_threads );
 
 FILTERING:
 print "Running FILTERING...\n";
+$project->filter( $bowtie_num_threads );
 
 #ASSEMBLY:
 

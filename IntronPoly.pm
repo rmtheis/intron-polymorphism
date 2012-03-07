@@ -318,11 +318,11 @@ sub run_bowtie2_mapping {
 
   # Call bowtie to run the mapping
   my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
-                         "--threads $num_threads --time " .
-                         "--un-conc $work_dir/${data_basename}_un-conc.%.fq " .
+                         "--threads $num_threads --time --reorder " .
                          "-M 0 -1 $reads_file_one -2 $reads_file_two " .
                          "--al-conc $work_dir/${data_basename}_al-conc.%.fq " .
-                         "> $work_dir/${data_basename}_hits.map"
+                         "--un-conc $work_dir/${data_basename}_un-conc.%.fq " .
+                         "-S $work_dir/${data_basename}_alignment.sam"
                        );
 
   if( $EXITVAL != 0 ) {
@@ -336,7 +336,7 @@ sub run_bowtie2_mapping {
 
  Title   : bowtie1_identify
  Usage   : 
- Function: Identifies the half-mapping pairs
+ Function: Identifies the half-mapping pairs from Bowtie 1 run data
  Example : 
  Returns : 
  Args    : 
@@ -345,8 +345,8 @@ sub run_bowtie2_mapping {
 
 sub bowtie1_identify {
   my $self = shift;
-  my $data_basename = shift;
   my $num_threads = shift;
+  my $data_basename = $self->{"data_basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $bowtie1_dir = $self->{"bowtie_db"}->{"bowtie1_dir"};
   my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
@@ -413,7 +413,7 @@ sub bowtie1_identify {
 
  Title   : bowtie2_identify
  Usage   : 
- Function: Identifies the half-mapping pairs
+ Function: Identifies the half-mapping pairs from a Bowtie 2 aligment map
  Example : 
  Returns : 
  Args    : 
@@ -422,35 +422,148 @@ sub bowtie1_identify {
 
 sub bowtie2_identify {
   my $self = shift;
-  my $data_basename = shift;
+  my $data_basename = $self->{"data_basename"};
   my $work_dir = $self->{"work_dir"};
 
-  print "Identifying half-mapping pairs from bowtie output...\n";
-  my $results = capture( "cut -f 1,2,4,10,11 $work_dir/${data_basename}_hits.map " .
-          "> $work_dir/${data_basename}_subset.map" );
-  if( $EXITVAL != 0 ) {
-    die "$0: cut exited unsuccessful";
-  }
+  print "Identifying half-mapping pairs from Bowtie 2 output...\n";
 
-  # Filter mates with flag sums of 69 or 165
-  my $ifh = new IO::File("$work_dir/${data_basename}_subset.map", 'r') 
-          or die "Can't open $work_dir/${data_basename}_subset.map: $!";
-  my $ofh1 = IO::File->new("$work_dir/${data_basename}_halfmapping.1", "w") 
-          or die "Can't create $work_dir/${data_basename}_halfmapping.1: $!";
-  my $ofh2 = IO::File->new("$work_dir/${data_basename}_halfmapping.2", "w")
-          or die "Can't create $work_dir/${data_basename}_halfmapping.2: $!";
+  # # Remove all rows we're not interested in now
+  # my $results = capture( "cut -f 1,2,4,10,11 $work_dir/${data_basename}_alignment.sam " .
+  #        "> $work_dir/${data_basename}_alignment_pruned" );
+  # if( $EXITVAL != 0 ) {
+  #   die "$0: cut exited unsuccessful";
+  # }
+
+  # Filter all mates from half-mapping pairs
+  my $ifh = new IO::File("$work_dir/${data_basename}_alignment.sam", 'r') 
+          or die "Can't open $work_dir/${data_basename}_alignment.sam: $!";
+  my $ofh = IO::File->new("$work_dir/${data_basename}_halfmapping.sam", "w") 
+          or die "Can't create $work_dir/${data_basename}_halfmapping.sam: $!";
   while( my $line = $ifh->getline ) {
-    if ( $line =~ m/^\S+\s(\d+).*/ ) {
+    if( $line =~ m/^\S+\s(\d+).*/ ) {
       my $flag_sum = $1;
-      if( $flag_sum == 69 ) {
-        print $ofh1 $line;
-      }
-      if( $flag_sum == 165 ) {
-        print $ofh2 $line;
+      if( $flag_sum == 65 || $flag_sum == 69 || $flag_sum == 89 || $flag_sum == 101 ||
+          $flag_sum == 133 || $flag_sum == 137 || $flag_sum == 145 || $flag_sum == 165 ) {
+        print $ofh $line;
       }
     }
-
   }
+  $ifh->close;
+  $ofh->close;
+}
+
+=head2 filter
+
+ Title   : filter
+ Usage   : 
+ Function: 
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
+sub filter {
+  my $self = shift;
+  my $num_threads = shift;
+  my $work_dir = $self->{"work_dir"};
+  my $data_basename = $self->{"data_basename"};
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $bowtie2_dir = $self->{"bowtie_db"}->{"bowtie2_dir"};
+  my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  my $ifh = new IO::File("$work_dir/${data_basename}_halfmapping.sam", 'r')
+          or die "Can't open $work_dir/${data_basename}_halfmapping.sam: $!";
+  my $ofh1 = new IO::File("$work_dir/${data_basename}_fake_paired_end.1.fq", 'w')
+          or die "Can't open $work_dir/${data_basename}_fake_paired_end.1.fq: $!";
+  my $ofh2 = new IO::File("$work_dir/${data_basename}_fake_paired_end.2.fq", 'w')
+          or die "Can't open $work_dir/${data_basename}_fake_paired_end.2.fq: $!";
+
+  # Get the mates we want and write them as fake paired-end reads to FastQ
+  my $read_length;
+  while( my $line = $ifh->getline ) {
+    if( $line =~ m/^(\S+)\s(\d+)\s\S+\s\S+\s\S+\s\S+\s\S+\s\S+\s\S+\s(\S+)\s(\S+)\s.*/ ) {
+      my $flag_sum = $2;
+      if( $flag_sum == 65 || $flag_sum == 89 || $flag_sum == 137 || $flag_sum == 145 ) { 
+        # Determine how big to make the fake paired ends based on the original length of the read
+        my $id = $1;
+        my $sequence = $3;
+        my $quality_scores = $4;
+
+        # Define the fake mates. Length is ~20% of original. Mate 2 gets reversed.
+        my $mate_length = length($sequence) / 5;
+        my $mate_1 = substr($sequence, 0, $mate_length);
+        my $mate_2 = scalar reverse substr($sequence, -1 * $mate_length);
+        my $quality_scores_1 = substr($quality_scores, 0, $mate_length);
+        my $quality_scores_2 = scalar reverse substr($quality_scores, -1 * $mate_length);
+
+        # Write the fake mates
+        print $ofh1 "\@$id\/1\n$mate_1\n+\n$quality_scores_1\n";
+        print $ofh2 "\@$id\/2\n$mate_2\n+\n$quality_scores_2\n";
+
+        # Record read length for fake pair alignment parameters
+        $read_length = length($sequence);
+      }
+    }
+  }
+  $ifh->close;
+  $ofh1->close;
+  $ofh2->close;
+
+  # Run Bowtie 2 with the fake pairs as input
+  my $minins = $read_length - 10;
+  if( $minins < 0 ) {
+    $minins = 0;
+  }
+  my $maxins = $read_length + 10;
+  print "using minins $minins, maxins $maxins\n";
+  my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
+                         "--threads $num_threads --time --reorder " .
+                         "--minins $minins --maxins $maxins " .
+                         "-1 $work_dir/${data_basename}_fake_paired_end.1.fq " . 
+                         "-2 $work_dir/${data_basename}_fake_paired_end.2.fq " . # Note: -M 0 removed
+                         "--al-conc $work_dir/${data_basename}_fake_pairs_al-conc.%.fq " .
+                         "--un-conc $work_dir/${data_basename}_fake_pairs_un-conc.%.fq " .
+                         "-S $work_dir/${data_basename}_fake_pairs_aligned.sam"
+                       );
+
+  # Determine if the alignments map near the mate that originally mapped--if so, discard this pair
+  #  Go through _halfmapping.sam
+  #  Go through _fake_pairs_aligned and write the remaining halfmapping pairs from _halfmapping.sam to _filtered.sam
+  $ifh = new IO::File("$work_dir/${data_basename}_halfmapping.sam", 'r')
+          or die "Can't open $work_dir/${data_basename}_halfmapping.sam: $!"; 
+  my $ifh2 = new IO::File("$work_dir/${data_basename}_fake_pairs_aligned.sam", 'r')
+          or die "Can't open $work_dir/${data_basename}_fake_pairs_aligned.sam: $!";
+  while( my $line = $ifh2->getline ) {
+    if( $line =~  m/^(\S+)\s(\d+)\s.*/ ) {
+      # Get the mapping fake pairs here
+      my $id = $1;
+      my $flag_sum = $2;
+      if( $flag_sum == 83 || $flag_sum == 99 || $flag_sum == 147 || $flag_sum == 163 ) {
+        # Get the mapping fake pairs here
+        my $orig_line = $ifh->getline;
+  
+        # Determine if they mapped near the original mapping mate from the original half-mapping pair
+        # TODO Check this block, and refactor if necessary.
+        if( $orig_line =~ m/^(\S+)\s(\d+)\s.*/ ) {
+          print "orig mate $1 is $2\n";
+          my $orig_id = $1;
+          while( $orig_id ne $id ) {
+            $orig_line = $ifh->getline;
+            if ( $orig_line =~ m/^(\S+)\s(\d+)\s.*/ ) {
+              print "fake mate is ID $id, flag-sum $flag_sum, orig mate is ID $1, flag-sum $2\n";
+              $orig_id = $1;
+            }
+          }
+          $orig_line =~ m/^(\S+)\s(\d+)\s.*/;
+          $orig_id = $1;
+          print "match. $id = $orig_id\n";
+        }
+
+
+      }
+    }
+  }
+
 }
 
 ############ Subroutines for internal use by this module ############
