@@ -30,18 +30,18 @@ my $skip_to = "";
 my $scripts_dir = "/home/theis/intron-polymorphism";
 
 # Reference genome filename (FastA format)
-my $ref_genome_filename = "/home/theis/intron-polymorphism/genomes/testGenome.fna";
+my $ref_genome_filename = "/home/theis/intron-polymorphism/testdata/testGenome.fna";
 
 # Previously used output directory name, for restarting a partially completed run 
 # Leave this option empty ("") to start a new run of the pipeline
 my $resume_work_dir = "";
 
 # Directory where the unmapped reads are located
-my $reads_dir = "/home/theis/intron-polymorphism/reads";
+my $reads_dir = "/home/theis/intron-polymorphism/testdata";
 
 # Base of the unmapped reads filenames, without ".1.fq" or ".2.fq" extension (FastQ format)
 # This base filename will be used for all data subsequently generated from these reads.
-my $data_basename = "testData";
+my $data_basename = "reads";
 
 # Directory name where the bowtie executables are located
 my $bowtie1_dir = "/home/theis/intron-polymorphism/bowtie-0.12.7";
@@ -51,7 +51,8 @@ my $bowtie2_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta5";
 my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
 
 # Number of threads to use when running bowtie
-my $bowtie_num_threads = Sys::CPU::cpu_count();
+#my $bowtie_num_threads = Sys::CPU::cpu_count();
+my $bowtie_num_threads = 4;
 
 # Check for invalid input
 if ($resume_work_dir ne "" && $reads_dir ne "") {
@@ -152,5 +153,8 @@ $project->filter( $bowtie_num_threads );
 
 #ANALYSIS:
 
+# Copy latest run to "run-latest" directory for quickly locating the last-run results
+system( "rm run-latest/*" );
+system( "cp $work_dir/* run-latest" );
 
 exit;

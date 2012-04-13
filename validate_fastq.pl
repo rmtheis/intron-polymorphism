@@ -49,38 +49,38 @@ while ( my $line_1 = $ifh1->getline ) {
 
   if ( $line_count == 0 ) {
     if ( substr( $line_1, 0, 1 ) ne "@" ) {
-      print "Validation error: FastQ ID does not begin with \'@\': $line_1";
-      print "File $input_file_1\n";
+      print STDERR "Validation error: FastQ ID does not begin with \'@\': $line_1";
+      print STDERR "File $input_file_1\n";
       die;
     }
 
     if ( $line_1 =~ m/\|/ ) {
-      print "Validation error: Pipe character (\"\|\") in ID: $line_1";
-      print "File: $input_file_1\n";
+      print STDERR "Validation error: Pipe character (\"\|\") in ID: $line_1";
+      print STDERR "File: $input_file_1\n";
       die;
     }
     if ( $line_2 =~ m/\|/ ) {
-      print "Validation error: Pipe character (\"\|\") in ID: $line_2";
-      print "File: $input_file_2\n";
+      print STDERR "Validation error: Pipe character (\"\|\") in ID: $line_2";
+      print STDERR "File: $input_file_2\n";
       die;
     }
 
     $line_1 =~ s/\/1$//;
     $line_2 =~ s/\/2$//;
     if ( $line_2 !~ m/^$line_1$/ ) {
-      print "Validation error: FastQ ID lines do not match between mates\n";
-      print "$input_file_1: $line_1";
-      print "$input_file_2: $line_2";
+      print STDERR "Validation error: FastQ ID lines do not match between mates\n";
+      print STDERR "$input_file_1: $line_1";
+      print STDERR "$input_file_2: $line_2";
       die;
     }
   }
 
   if ( $line_1 =~ m/\t/ ) {
-    print "Validation error: FastQ read file contains a tab: $input_file_1\n";
+    print STDERR "Validation error: FastQ read file contains a tab: $input_file_1\n";
     die;
   }
   if ( $line_2 =~ m/\t/ ) {
-    print "Validation error: FastQ read file contains a tab: $input_file_2\n";
+    print STDERR "Validation error: FastQ read file contains a tab: $input_file_2\n";
     die;
   }
   $line_count = ($line_count + 1) % 4;
