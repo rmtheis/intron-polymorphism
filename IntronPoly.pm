@@ -562,6 +562,9 @@ sub filter {
                          "--al-conc $work_dir/${data_basename}_fake_pairs_al-conc.%.fq " .
                          "-S $work_dir/${data_basename}_fake_pairs_aligned.sam"
                        );
+  if ( $EXITVAL != 0 ) {
+    die "$0: bowtie2 exited unsuccessful";
+  }
 
   # Find reads representing insertions/deletions by considering all the fake pairs that aligned
   $ifh = new IO::File("$work_dir/${data_basename}_halfmapping.sam", 'r')
