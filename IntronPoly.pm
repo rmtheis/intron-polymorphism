@@ -146,7 +146,7 @@ sub mapping_setup {
   }
 
   # Perform basic validation on read pairs files
-  my $results = capture ( "$scripts_dir/validate_fastq.pl -i $reads_dir/$data_basename" );
+  $results = capture ( "$scripts_dir/validate_fastq.pl -i $reads_dir/$data_basename" );
   if ( $EXITVAL != 0 ) {
     die "$0: validate_fastq.pl exited unsuccessful";
   }
@@ -314,7 +314,7 @@ sub run_bowtie2_mapping {
 
   # Call bowtie to run the mapping
   my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
-                         "--threads $num_threads --time --reorder --sam-no-hd " .
+                         "--threads $num_threads --reorder --sam-no-hd " .
                          "--no-discordant --no-contain --no-overlap " .
                          "-k 4 -1 $reads_file_one -2 $reads_file_two " .
                          "--al-conc $work_dir/${data_basename}_al-conc.%.fq " .
