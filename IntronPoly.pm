@@ -17,7 +17,6 @@
 package IntronPoly;
 
 use strict;
-use Bio::Tools::GuessSeqFormat;
 use File::Basename;
 use IO::File;
 use IPC::System::Simple qw(capture $EXITVAL);
@@ -122,19 +121,17 @@ sub mapping_setup {
   my $data_basename = shift;
   my $scripts_dir = $self->{"scripts_dir"};
   my $work_dir = $self->{"work_dir"};
-
-  # Ensure reference genome appears to be FastA format
   my $ref_genome = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $ref_genome_dir = $self->{"ref_genome"}->{"dir"};
   unless (-d $ref_genome_dir) {
     die "$0: reference genome directory $ref_genome_dir does not exist" ;
   }
-  my $guesser = Bio::Tools::GuessSeqFormat->new();
-  $guesser->file( $ref_genome );
-  my $format = $guesser->guess;
-  if ($format ne "fasta") {
-    die "$0: reference genome $ref_genome does not appear to be a valid FastA file";
+
+  # Perform basic validation on reference genome
+  my $results = capture( "$scripts_dir/validate_fasta.pl -i $ref_genome" );
+  if ( $EXITVAL != 0 ) {
+    die "$0: validate_fasta.pl exited unsuccessful";
   }
 
   # Ensure that read pairs files exist

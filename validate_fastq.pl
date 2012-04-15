@@ -50,7 +50,7 @@ while ( my $line_1 = $ifh1->getline ) {
   if ( $line_count == 0 ) {
     if ( substr( $line_1, 0, 1 ) ne "@" ) {
       print STDERR "Validation error: FastQ ID does not begin with \'@\': $line_1";
-      print STDERR "File $input_file_1\n";
+      print STDERR "File: $input_file_1\n";
       die;
     }
 
@@ -85,4 +85,6 @@ while ( my $line_1 = $ifh1->getline ) {
   }
   $line_count = ($line_count + 1) % 4;
 }
+$ifh1->close;
+$ifh2->close;
 exit;
