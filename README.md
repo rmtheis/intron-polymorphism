@@ -13,7 +13,6 @@ Velvet
 ##INSTALLATION##
 
     git clone git://github.com/rmtheis/intron-polymorphism intron-poly
-    cpan Bio::Tools::GuessSeqFormat
     cpan File::Basename
     cpan IO::File
     cpan IPC::System::Simple
