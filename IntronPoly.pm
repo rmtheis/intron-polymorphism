@@ -553,6 +553,11 @@ sub filter {
 
     # Only create fake pairs for the unaligned mate in the pair
     if( &_isUnalignedMate($flag_sum) ) {
+      # Reverse complement reads that aligned to the reverse strand, to get original read
+      if(($flag_sum & 16) == 1) {
+        $sequence = &_reverseComplement($sequence);
+      }
+
       # Create the fake mates. Mate 2 gets reverse complemented.
       my $mate_1 = substr($sequence, 0, $mate_length);
       my $mate_2 = &_reverseComplement(substr($sequence, -1 * $mate_length));
