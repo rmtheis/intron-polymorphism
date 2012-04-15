@@ -317,9 +317,9 @@ sub run_bowtie2_mapping {
 
   # Call bowtie to run the mapping
   my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
-                         "--threads $num_threads --time --reorder " .
+                         "--threads $num_threads --time --reorder --sam-no-hd " .
                          "--no-discordant --no-contain --no-overlap " .
-                         "-k 3 -1 $reads_file_one -2 $reads_file_two " .
+                         "-k 4 -1 $reads_file_one -2 $reads_file_two " .
                          "--al-conc $work_dir/${data_basename}_al-conc.%.fq " .
                          "--un-conc $work_dir/${data_basename}_un-conc.%.fq " .
                          "-S $work_dir/${data_basename}_alignment.sam"
@@ -422,7 +422,7 @@ sub bowtie2_identify {
   my $data_basename = $self->{"data_basename"};
   my $work_dir = $self->{"work_dir"};
 
-  print "Identifying half-mapping read pairs with no secondary alignments...\n";
+  print "Identifying half-mapping read pairs...\n";
 
   # # Remove all rows we're not interested in now
   # my $results = capture( "cut -f 1,2,4,10,11 $work_dir/${data_basename}_alignment.sam " .
@@ -433,10 +433,13 @@ sub bowtie2_identify {
 
   my $ifh = new IO::File("$work_dir/${data_basename}_alignment.sam", 'r') 
           or die "Can't open $work_dir/${data_basename}_alignment.sam: $!";
-  my $ofh = IO::File->new("$work_dir/${data_basename}_halfmapping.sam", "w") 
-          or die "Can't create $work_dir/${data_basename}_halfmapping.sam: $!";
+  my $ofh = IO::File->new("$work_dir/${data_basename}_halfmapping1.sam", 'w') 
+          or die "Can't create $work_dir/${data_basename}_halfmapping1.sam: $!";
+  my $ofh2 = IO::File->new("$work_dir/${data_basename}_halfmapping2.sam", 'w')
+          or die "Can't create $work_dir/${data_basename}_halfmapping2.sam: $!";
   my $prev_id = "";
   my $discard_this_id = 0;
+  my $mapping = 0;
   my @print_lines;
   while( my $line = $ifh->getline ) {
     # Ensure we're reading an alignment line and not a header line
@@ -451,36 +454,60 @@ sub bowtie2_identify {
   
     # Check if this mate ID is different from the last line
     if ($mate_id ne $prev_id) {
-      # Print the half-mapping mate pairs with the last line's ID
-      if (scalar @print_lines == 2 && $prev_id ne "") {
+      # This line is the first line with a new read ID
+      if (scalar @print_lines == 2 && $mapping == 1 && $prev_id ne "") {
+        # Print the half-mapping mate pairs with the last line's ID
         print $ofh shift(@print_lines); # First mate in pair
         print $ofh shift(@print_lines); # Second mate in pair
+      } elsif (scalar @print_lines == 3 && $mapping == 2 && $prev_id ne "") {
+        # Print the trio where two mates align concordantly, and one has a secondary alignment
+        foreach my $ln (@print_lines) {
+          print $ofh2 $ln;
+        }
+        @print_lines = ();
       }
       $discard_this_id = 0;
       $prev_id = $mate_id;
     } else {
+      # This line is the second or greater line with this read ID
       if ($discard_this_id) {
         next;
       }
-      if (scalar @print_lines == 2) {
+      if (scalar @print_lines == 2 && $mapping == 0) {
         # Found a secondary alignment preceded by two half-mapping mates. Discard all lines with this ID.
+        @print_lines = ();
+        $discard_this_id = 1;
+        next;
+      } elsif (scalar @print_lines == 3) {
+        # We have four alignments for this read pair. Discard all lines with this ID.
         @print_lines = ();
         $discard_this_id = 1;
         next;
       }
     }
 
-    if( &_isHalfMapping($flag_sum) ) {
-      # Save this line for printing
+    # At this point we have an alignment we may want to keep, so look at the sum-of-flags value to classify.
+    if ( &_isMapping($flag_sum) ) {
+      # Save this full-mapping line for printing
+      $mapping = 2;
+      push( @print_lines, $line );
+    } elsif ( &_isNonMapping($flag_sum) ) {
+      # We have a non-mapping ID. Discard all lines with this ID.
+      $mapping = 0;
+      $discard_this_id = 1;
+    } elsif( &_isHalfMapping($flag_sum) ) {
+      # Save this half-mapping line for printing
+      $mapping = 1;
       push( @print_lines, $line );
     } else {
-      # We have a non-half-mapping ID. Discard all lines with this ID.
-      @print_lines = ();
-      $discard_this_id = 1;
+      # We have a secondary alignment.
+      $mapping = 2;
+      push( @print_lines, $line );
     }
   }
   $ifh->close;
   $ofh->close;
+  $ofh2->close;
 }
 
 =head2 filter
@@ -502,8 +529,8 @@ sub filter {
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $bowtie2_dir = $self->{"bowtie_db"}->{"bowtie2_dir"};
   my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
-  my $ifh = new IO::File("$work_dir/${data_basename}_halfmapping.sam", 'r')
-          or die "$0: Can't open $work_dir/${data_basename}_halfmapping.sam: $!";
+  my $ifh = new IO::File("$work_dir/${data_basename}_halfmapping1.sam", 'r')
+          or die "$0: Can't open $work_dir/${data_basename}_halfmapping1.sam: $!";
   my $ofh = new IO::File("$work_dir/${data_basename}_fake_paired_end.1.fq", 'w')
           or die "$0: Can't open $work_dir/${data_basename}_fake_paired_end.1.fq: $!";
   my $ofh2 = new IO::File("$work_dir/${data_basename}_fake_paired_end.2.fq", 'w')
@@ -545,6 +572,10 @@ sub filter {
   $ofh2->close;
 
   # Define the maximum/minimum insert length as read length +/- 10
+  if (!defined $read_length) {
+    print STDERR "$0: filter(): No half-mapping pairs available.\n";
+    return 1;
+  }
   my $minins = $read_length - 10;
   if( $minins < 0 ) {
     $minins = 0;
@@ -554,7 +585,7 @@ sub filter {
 
   # Run Bowtie 2 with the fake read pairs as input
   my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
-                         "--threads $num_threads --time --reorder " .
+                         "--threads $num_threads --time --reorder --sam-no-hd " .
                          "--minins $minins --maxins $maxins " .
                          "--no-mixed --no-discordant --no-contain --no-overlap " .
                          "-1 $work_dir/${data_basename}_fake_paired_end.1.fq " . 
@@ -567,8 +598,8 @@ sub filter {
   }
 
   # Find reads representing insertions/deletions by considering all the fake pairs that aligned
-  $ifh = new IO::File("$work_dir/${data_basename}_halfmapping.sam", 'r')
-          or die "$0: Can't open $work_dir/${data_basename}_halfmapping.sam: $!"; 
+  $ifh = new IO::File("$work_dir/${data_basename}_halfmapping1.sam", 'r')
+          or die "$0: Can't open $work_dir/${data_basename}_halfmapping1.sam: $!"; 
   my $ifh2 = new IO::File("$work_dir/${data_basename}_fake_pairs_aligned.sam", 'r')
           or die "$0: Can't open $work_dir/${data_basename}_fake_pairs_aligned.sam: $!";
   $ofh = new IO::File("$work_dir/${data_basename}_filtered.sam", 'w')
@@ -771,6 +802,16 @@ sub _isMapping {
       $flag == 99 ||
       $flag == 147 ||
       $flag == 163 ) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+# Returns 1 if the given sum-of-flags value identifies a mate in a no-alignments pair, otherwise returns 0
+sub _isNonMapping {
+  my $flag = shift;
+  if( $flag == 77 || $flag == 141 ) {
     return 1;
   } else {
     return 0;
