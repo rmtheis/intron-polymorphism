@@ -21,6 +21,8 @@ use File::Basename;
 use IO::File;
 use IPC::System::Simple qw(capture $EXITVAL);
 
+use constant DEBUG => (1); # Flag to print info for debugging (temporary)
+
 =head2 new
 
  Title   : new
@@ -136,8 +138,8 @@ sub mapping_setup {
 
   # Ensure that read pairs files exist
   $reads_dir = $1 if ($reads_dir =~ /(.*)\/$/);
-  my $reads_file_one = "$reads_dir/$data_basename.1.fq";
-  my $reads_file_two = "$reads_dir/$data_basename.2.fq";
+  my $reads_file_one = "$reads_dir/${data_basename}_1.fq";
+  my $reads_file_two = "$reads_dir/${data_basename}_2.fq";
   unless (-e $reads_file_one) {
     die "$0: reads file $reads_file_one does not exist";
   }
@@ -194,7 +196,7 @@ sub build_bowtie1_index {
              "$bowtie_index_dir/$ref_genome_basename.rev.1.ebwt" &&
              "$bowtie_index_dir/$ref_genome_basename.rev.2.ebwt") {
     # Call bowtie-build to create the bowtie index
-    print "Creating bowtie index in $bowtie_index_dir...";
+    print "Creating bowtie index in $bowtie_index_dir...\n";
     my $results = capture( "$bowtie1_dir/bowtie-build " .
                            "$ref_genome $bowtie_index_dir/$ref_genome_basename" );
     if ( $EXITVAL != 0 ) {
@@ -230,13 +232,12 @@ sub build_bowtie2_index {
              "$bowtie_index_dir/$ref_genome_basename.rev.1.bt2" &&
              "$bowtie_index_dir/$ref_genome_basename.rev.2.bt2") {
     # Call bowtie-build to create the bowtie index
-    print "Creating bowtie index in $bowtie_index_dir...";
+    print "Creating bowtie index in $bowtie_index_dir...\n";
     my $results = capture( "$bowtie2_dir/bowtie2-build " .
                            "$ref_genome $bowtie_index_dir/$ref_genome_basename" );
     if ( $EXITVAL != 0 ) {
       die "$0: bowtie2-build exited unsuccessful";
     }
-    print "finished.\n";
   } else {
     print "Bowtie2 index already exists, not re-creating.\n";
     print "Using Bowtie2 index at $bowtie_index_dir/$ref_genome_basename.*\n";
@@ -278,15 +279,13 @@ sub run_bowtie1_mapping {
   if( $EXITVAL != 0 ) {
     die "$0: bowtie1 exited unsuccessful";
   }
-  print "Bowtie1 finished.\n";
 
   # Sort aligning reads by match position
-  #print "Sorting aligned reads by hit position...";
+  #print "Sorting aligned reads by hit position...\n";
   #$results = capture( "sort -k 3,3 --sort=n $work_dir/hits.map -o $work_dir/hits_sorted.map" );
   #if( $EXITVAL != 0 ) {
   #  die "$0: sort exited unsuccessful";
   #}
-  #print "finished.\n";
 }
 
 =head2 run_bowtie2_mapping
@@ -315,8 +314,10 @@ sub run_bowtie2_mapping {
   # Call bowtie to run the mapping
   my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
                          "--threads $num_threads --reorder --sam-no-hd " .
-                         "--no-discordant --no-contain --no-overlap " .
-                         "-k 4 -1 $reads_file_one -2 $reads_file_two " .
+                         "--maxins 500 --minins 100 " .
+                         "--no-discordant " . 
+                         "--no-contain --no-overlap " .
+                         "-k 3 -1 $reads_file_one -2 $reads_file_two " .
                          "--al-conc $work_dir/${data_basename}_al-conc.%.fq " .
                          "--un-conc $work_dir/${data_basename}_un-conc.%.fq " .
                          "-S $work_dir/${data_basename}_alignment.sam"
@@ -325,7 +326,6 @@ sub run_bowtie2_mapping {
   if( $EXITVAL != 0 ) {
     die "$0: bowtie2 exited unsuccessful";
   }
-  print "Bowtie2 finished.\n";
 
 }
 
@@ -353,7 +353,7 @@ sub bowtie1_identify {
   # reference sequence because Bowtie 1 was run with option '-m 1'.
   print "Running bowtie to identify half-mapping read pairs...\n";
   my $results = capture( "$bowtie1_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
-                         "--threads $num_threads --suppress 3,6 --time " .
+                         "--threads $num_threads --suppress 3,6 " .
                          "-m 1 $work_dir/${data_basename}_unaligned_1 " . 
                          "--al $work_dir/${data_basename}_1_halfmapping.1.fq " . 
                          #"--un $work_dir/mate1_unaligned .
@@ -361,7 +361,7 @@ sub bowtie1_identify {
                        );
 
   $results = capture( "$bowtie1_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
-                         "--threads $num_threads --suppress 3,6 --time " .
+                         "--threads $num_threads --suppress 3,6 " .
                          "-m 1 $work_dir/${data_basename}_unaligned_2 " . 
                          "--al $work_dir/${data_basename}_2_halfmapping.2.fq " . 
                          #"--un $work_dir/mate2_unaligned " . 
@@ -507,6 +507,53 @@ sub bowtie2_identify {
   $ofh2->close;
 }
 
+# =head2 find_distant_alignments
+# 
+#  Title   : find_distant_alignments
+#  Usage   : 
+#  Function: Run Bowtie to find read pairs where both mates align concordantly, but far from one another
+#  Example : 
+#  Returns : 
+#  Args    : 
+# 
+# =cut
+# 
+# sub find_distant_alignments {
+#   my $self = shift;
+#   my $num_threads = shift;
+#   my $data_basename = $self->{"data_basename"};
+#   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+#   my $bowtie2_dir = $self->{"bowtie_db"}->{"bowtie2_dir"};
+#   my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+#   my $reads_file_one = $self->{"bowtie_db"}->{"reads_file_one"};
+#   my $reads_file_two = $self->{"bowtie_db"}->{"reads_file_two"};
+#   my $work_dir = $self->{"work_dir"};
+#   print "Running mapping using bowtie2 to find distant alignments, using $num_threads threads...\n";
+# 
+#   # Combine the read pairs files into one file with unique IDs for unpaired mapping
+#   my $unpaired_reads_file = "$work_dir/${data_basename}_unpaired.fq";
+#   &_combine_fastq( $reads_file_one, $reads_file_two, $unpaired_reads_file );
+# 
+# 
+#   # Call bowtie to run the mapping as unpaired reads
+#   my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
+#                          "--threads $num_threads --reorder --sam-no-hd " .
+#                          "--no-discordant --no-contain --no-overlap " .
+#                          "-k 3 -U $reads_file_one,$reads_file_two " .
+#                          #"--al-conc $work_dir/${data_basename}_al-conc.%.fq " .
+#                          #"--un-conc $work_dir/${data_basename}_un-conc.%.fq " .
+#                          "-S $work_dir/${data_basename}_halfmapping3.sam.tmp"
+#                        );
+#
+#  if( $EXITVAL != 0 ) {
+#    die "$0: bowtie2 exited unsuccessful";
+#  }
+# 
+#   # Parse the alignments file to compare distances between reads
+# 
+#   print "debug: find_distant_alignments() done.\n";
+# }
+
 =head2 filter
 
  Title   : filter
@@ -528,15 +575,20 @@ sub filter {
   my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   my $ifh = new IO::File("$work_dir/${data_basename}_halfmapping1.sam", 'r')
           or die "$0: Can't open $work_dir/${data_basename}_halfmapping1.sam: $!";
-  my $ofh = new IO::File("$work_dir/${data_basename}_fake_paired_end.1.fq", 'w')
-          or die "$0: Can't open $work_dir/${data_basename}_fake_paired_end.1.fq: $!";
-  my $ofh2 = new IO::File("$work_dir/${data_basename}_fake_paired_end.2.fq", 'w')
-          or die "$0 Can't open $work_dir/${data_basename}_fake_paired_end.2.fq: $!";
+  my $ofh = new IO::File("$work_dir/${data_basename}_fake_paired_end_1.fq", 'w')
+          or die "$0: Can't open $work_dir/${data_basename}_fake_paired_end_1.fq: $!";
+  my $ofh2 = new IO::File("$work_dir/${data_basename}_fake_paired_end_2.fq", 'w')
+          or die "$0 Can't open $work_dir/${data_basename}_fake_paired_end_2.fq: $!";
   # Define length of each mate for the fake read pairs
   my $mate_length = 16;
 
+  # Define length of read pair for fake paired-end alignment
+  my $read_length = 500;
+
+  # Boolean to track whether we have any half-mapping pairs
+  my $have_candidates = 0;
+
   # Get the mates we want and write them as fake paired-end reads to FastQ
-  my $read_length;
   while( my $line = $ifh->getline ) {
     my ( $id, $flag_sum, $sequence, $quality_scores );
     if( $line =~ m/^(\S+)\s(\d+)\s\S+\s\S+\s\S+\s\S+\s\S+\s\S+\s\S+\s(\S+)\s(\S+)\s.*/ ) {
@@ -548,8 +600,11 @@ sub filter {
       next;
     }
 
-    # Only create fake pairs for the unaligned mate in the pair
+    # Create a fake pair from the unaligned mate in the pair
     if( &_isUnalignedMate($flag_sum) ) {
+      # Set a flag indicating that we got at least one half-mapping pair
+      $have_candidates = 1;
+
       # Reverse complement reads that aligned to the reverse strand, to get original read
       if(($flag_sum & 16) == 1) {
         $sequence = &_reverseComplement($sequence);
@@ -564,9 +619,6 @@ sub filter {
       # Write the fake mates
       print $ofh "\@$id\/1\n$mate_1\n+\n$quality_scores_1\n";
       print $ofh2 "\@$id\/2\n$mate_2\n+\n$quality_scores_2\n";
-
-      # Record read length for fake pair alignment parameters
-      $read_length = length($sequence);
     }
   }
   $ifh->close;
@@ -574,104 +626,157 @@ sub filter {
   $ofh2->close;
 
   # Define the maximum/minimum insert length as read length +/- 10
-  if (!defined $read_length) {
+  if (!$have_candidates) {
     print STDERR "$0: filter(): No half-mapping pairs available.\n";
     return 1;
   }
-  my $minins = $read_length - 10;
-  if( $minins < 0 ) {
-    $minins = 0;
-  }
-  my $maxins = $read_length + 10;
-  print "using minins $minins, maxins $maxins\n";
 
   # Run Bowtie 2 with the fake read pairs as input
   my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
-                         "--threads $num_threads --time --reorder --sam-no-hd " .
-                         "--minins $minins --maxins $maxins " .
+                         "--threads $num_threads --reorder --sam-no-hd " .
                          "--no-mixed --no-discordant --no-contain --no-overlap " .
-                         "-1 $work_dir/${data_basename}_fake_paired_end.1.fq " . 
-                         "-2 $work_dir/${data_basename}_fake_paired_end.2.fq " .
-                         "--al-conc $work_dir/${data_basename}_fake_pairs_al-conc.%.fq " .
-                         "-S $work_dir/${data_basename}_fake_pairs_aligned.sam"
+                         "-1 $work_dir/${data_basename}_fake_paired_end_1.fq " . 
+                         "-2 $work_dir/${data_basename}_fake_paired_end_2.fq " .
+                         #"--al-conc $work_dir/${data_basename}_fake_pairs_al-conc.%.fq " .
+                         "-S $work_dir/${data_basename}_fake_pairs_alignment.sam"
                        );
   if ( $EXITVAL != 0 ) {
     die "$0: bowtie2 exited unsuccessful";
   }
 
   # Find reads representing insertions/deletions by considering all the fake pairs that aligned
-  $ifh = new IO::File("$work_dir/${data_basename}_halfmapping1.sam", 'r')
-          or die "$0: Can't open $work_dir/${data_basename}_halfmapping1.sam: $!"; 
-  my $ifh2 = new IO::File("$work_dir/${data_basename}_fake_pairs_aligned.sam", 'r')
-          or die "$0: Can't open $work_dir/${data_basename}_fake_pairs_aligned.sam: $!";
+  $ifh = new IO::File("$work_dir/${data_basename}_fake_pairs_alignment.sam", 'r')
+          or die "$0: Can't open $work_dir/${data_basename}_fake_pairs_alignment.sam: $!"; 
+  my $ifh2 = new IO::File("$work_dir/${data_basename}_halfmapping1.sam", 'r')
+          or die "$0: Can't open $work_dir/${data_basename}_halfmapping1.sam: $!";
   $ofh = new IO::File("$work_dir/${data_basename}_filtered.sam", 'w')
           or die "$0: Can't open $work_dir/${data_basename}_filtered.sam: $!";
-  $ofh2 = new IO::File("$work_dir/${data_basename}_fake_pairs_aligned.debug", 'w')
-          or die "$0: Can't open $work_dir/${data_basename}_fake_pairs_aligned.debug: $!";
+  $ofh2 = new IO::File("$work_dir/${data_basename}_fake_pairs_alignment.debug", 'w')
+          or die "$0: Can't open $work_dir/${data_basename}_fake_pairs_alignment.debug: $!" if DEBUG;
+
+  # Get an alignment from the originally half-mapping pairs
   while( my $line = $ifh2->getline ) {
-    my $mate_id;
-    my $flag_sum;
-    my $pos;
-    if( $line =~  m/^(\S+)\s(\d+)\s\S+\s(\S+).*/ ) {
-      $mate_id = $1;
-      $flag_sum = $2;
-      $pos = $3;
+    my $orig_id;
+    my $orig_flag_sum;
+    my $other_mate_pos;
+    if( $line =~  m/^(\S+)\s(\d+)\s\S+\s\S+\s\S+\s\S+\s\S+\s(\S+)/ ) {
+      $orig_id = $1;
+      $orig_flag_sum = $2;
+      $other_mate_pos = $3;
     } else {
       next;
     }
 
-    # Discard the fake pairs that aligned discordantly
-    if( !&_isMapping($flag_sum) ) {
+    # Consider only the unaligned mate from the half-mapping read pair
+    if( !&_isUnalignedMate($orig_flag_sum) ) {
       next;
     }
 
-    # Get the corresponding alignment from the original half-mapping reads
-    while (my $orig_line = $ifh->getline) {
-      my $orig_id;
-      my $orig_flag_sum;
-      my $orig_pos;
-      if( $orig_line =~ m/^(\S+)\s(\d+)\s\S+\s(\S+).*/ ) {
-        $orig_id = $1;
-        $orig_flag_sum = $2;
-        $orig_pos = $3;
+    # Get the corresponding alignment from the fake pairs
+    while (my $fake_line = $ifh->getline) {
+      my $id;
+      my $pos;
+      if( $fake_line =~ m/^(\S+)\s\d+\s\S+\s(\S+).*/ ) {
+        $id = $1;
+        $pos = $2;
       } else {
         next;
       }
-      while( $orig_id ne $mate_id ) {
-        $orig_line = $ifh->getline;
-        if ( $orig_line =~ m/(\S+)\s(\d+)\s\S+\s(\S+).*/ ) {
-          $orig_id = $1;
-          $orig_flag_sum = $2;
-          $orig_pos = $3;
+      while( $id ne $orig_id ) {
+        $fake_line = $ifh->getline;
+        if( $fake_line =~ m/(\S+)\s\d+\s\S+\s(\S+).*/ ) {
+          $id = $1;
+          $pos = $2;
         }
       }
-      # Get the line with the second mate in the fake pair
-      my $line2 = $ifh2->getline;
-      # Get second mate from the half-mapping read pair
-      my $orig_line2 = $ifh->getline;
 
-      print $ofh2 "\nFAKE PAIR ALIGNMENT LINE 1: $line";
-      print $ofh2 "FAKE PAIR ALIGNMENT LINE 2: $line2";
-      print $ofh2 "ORIGINAL HALF-MAPPING PAIR LINE 1: $orig_line";
-      print $ofh2 "ORIGINAL HALF-MAPPING PAIR LINE 2: $orig_line2";
+      print $ofh2 "\nFAKE PAIR ALIGNMENT LINE 1: $fake_line" if DEBUG;
+      print $ofh2 "ORIGINAL HALF-MAPPING PAIR UNALIGNED MATE: $line" if DEBUG;
+      print $ofh2 "ORIG_POS: $other_mate_pos POS: $pos\n" if DEBUG;
 
       # Discard fake pairs that align close to the originally aligning mate in the half-mapping read pair
-      if( $pos - $orig_pos < $maxins || $orig_pos - $pos < $maxins ) {
-        print $ofh2 "DISCARDED -- $pos - $orig_pos < +/- $maxins\n";
+      if( $pos != 0 && ($pos < ($other_mate_pos + $read_length + 10) && $pos > ($other_mate_pos + $read_length - 10))) {
+        print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $read_length plus or minus ten\n" if DEBUG;
         last;
       }
+      print $ofh2 "RETAINED: pos = $pos, other_mate_pos = $other_mate_pos\n" if DEBUG;
 
-      # Keep only the unaligned mate from the half-mapping read pair
-      if( &_isUnalignedMate($orig_flag_sum) ) {
-        print $ofh $orig_line;
-      } else {
-        print $ofh $orig_line2;
-      } 
+      # Keep this mate
+      print $ofh $line;
       last;
     }
   }
   $ifh->close;
   $ifh2->close;
+  $ofh->close;
+  $ofh2->close if DEBUG;
+}
+
+=head2 group
+
+ Title   : group
+ Usage   : 
+ Function: 
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
+sub group {
+  my $self = shift;
+  my $work_dir = $self->{"work_dir"};
+  my $data_basename = $self->{"data_basename"};
+
+  # Expected intron length
+  my $intron_length = 250;
+
+  # Read length
+  my $read_length = 500;
+
+  # Mate length
+  my $mate_length = 125; # TODO get this from SAM
+
+  # Sort by alignment positionn
+  my $results = capture( "cat $work_dir/${data_basename}_filtered.sam " .
+                         "$work_dir/${data_basename}_halfmapping2.sam " .
+                         "> $work_dir/${data_basename}_halfmapping_all.sam" );
+  if ( $EXITVAL != 0 ) {
+    die "$0: cat exited unsuccessful";
+  }
+  $results = capture( "sort -k 4,4 -n -o $work_dir/${data_basename}_halfmapping_all_sorted.sam " .
+                         "$work_dir/${data_basename}_halfmapping_all.sam" );
+  if ( $EXITVAL != 0 ) {
+    die "$0: sort exited unsuccessful";
+  }
+
+  # Get the clusters one at a time
+  my $ifh = new IO::File("$work_dir/${data_basename}_filtered.sam", 'r')
+          or die "$0: Can't open $work_dir/${data_basename}_filtered.sam: $!";
+  my @cluster;
+  my $have_cluster = 0;
+  my $last_pos = 0;
+  my $overlap_dist = 2 * (($read_length - 2 * $mate_length) + $intron_length);
+ 
+  my $id;
+  my $pos; 
+  while( my $line = $ifh->getline ) {
+    if( $line =~  m/^(\S+)\s\d+\s\S+\s\S+\s\S+\s\S+\s\S+\s(\S+)/ ) {
+      $id = $1;
+      $pos = $2;
+    } else {
+      next;
+    }
+    
+    # Add or discard based on position
+
+    # Run velvet on the reads one at a time using stdout
+
+    # velveth $work_dir/velvet-results-separate-dir 13 -sam -shortPaired 
+
+  }
+  $ifh->close;
+
 }
 
 ############ Subroutines for internal use by this module ############
@@ -830,6 +935,23 @@ sub _isUnalignedMate {
     return 1;
   } else {
     return 0;
+  }
+}
+
+# Combines two FastQ files, appending "-1" and "-2" to the read IDs for uniqueness
+sub _combine_fastq {
+  my $input_file1 = shift;
+  my $input_file2 = shift;
+  my $output_file = shift;
+  my $ifh1 = new IO::File($input_file1, 'r') or die "$0: Can't open $input_file1: $!";
+  my $ifh2 = new IO::File($input_file2, 'r') or die "$0: Can't open $input_file2: $!";
+  my $ofh = new IO::File($output_file, 'w') or die "$0: Can't open $output_file: $!";
+
+  while ( my $line = $ifh1->getline ) {
+    print $ofh $line; #TODO change the IDs. Put "-1" before any "/1"
+  }
+  while ( my $line = $ifh2->getline ) {
+    print $ofh $line; #TODO change the IDs.
   }
 }
 

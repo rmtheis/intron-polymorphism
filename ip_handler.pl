@@ -30,7 +30,7 @@ my $skip_to = "";
 my $scripts_dir = "/home/theis/intron-polymorphism";
 
 # Reference genome filename (FastA format)
-my $ref_genome_filename = "/home/theis/intron-polymorphism/testdata/testGenome.fna";
+my $ref_genome_filename = "/home/theis/intron-polymorphism/testdata/NC_008253.fna";
 
 # Previously used output directory name, for restarting a partially completed run 
 # Leave this option empty ("") to start a new run of the pipeline
@@ -39,9 +39,9 @@ my $resume_work_dir = "";
 # Directory where the unmapped reads are located
 my $reads_dir = "/home/theis/intron-polymorphism/testdata";
 
-# Base of the unmapped reads filenames, without ".1.fq" or ".2.fq" extension (FastQ format)
+# Base of the unmapped reads filenames, without "_1.fq" or "_2.fq" extension (FastQ format)
 # This base filename will be used for all data subsequently generated from these reads.
-my $data_basename = "reads";
+my $data_basename = "E10_000_000";
 
 # Directory name where the bowtie executables are located
 my $bowtie1_dir = "/home/theis/intron-polymorphism/bowtie-0.12.7";
@@ -52,13 +52,9 @@ my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
 
 # Number of threads to use when running bowtie
 #my $bowtie_num_threads = Sys::CPU::cpu_count();
-my $bowtie_num_threads = 4;
+my $bowtie_num_threads = 3;
 
 # Check for invalid input
-if ($resume_work_dir ne "" && $reads_dir ne "") {
-  print "Error: cannot specify both resume_work_dir and reads_dir. Set one to empty string.\n";
-  exit;
-}
 if ($data_basename eq "") {
   print "Error: data_basename not initialized. Set a value for data_basename.\n";
 }
@@ -91,6 +87,10 @@ my $mapping_setup_completed = 0;
 ##############################
 # JUMP TO THE REQUESTED STEP #
 ##############################
+
+if ( defined $skip_to && $skip_to ne "" && !(-e $resume_work_dir )) {
+  die "$0: resume_work_directory not found";
+}
 
 if ( $skip_to eq "C" ) { print "Skipping to collecting\n"; goto COLLECTION; }
 if ( $skip_to eq "F" ) { print "Skipping to filtering\n";  goto FILTERING; }
@@ -145,8 +145,9 @@ FILTERING:
 print "Running FILTERING...\n";
 $project->filter( $bowtie_num_threads );
 
-#ASSEMBLY:
-
+ASSEMBLY:
+print "Running ASSEMBLY...\n";
+$project->group();
 
 #ALIGNMENT:
 
