@@ -37,10 +37,16 @@ unless ( @ARGV ) {
 my $base_name;
 GetOptions( "i=s" =>\$base_name );
 
-my $input_file_1 = $base_name . ".1.fq";
-my $input_file_2 = $base_name . ".2.fq";
+my $input_file_1 = $base_name . "_1.fq";
+my $input_file_2 = $base_name . "_2.fq";
 my $ifh1 = new IO::File( $input_file_1, 'r' ) or die "Can't open $input_file_1: $!";
 my $ifh2 = new IO::File( $input_file_2, 'r' ) or die "Can't open $input_file_2: $!";
+
+if ( `wc -l $input_file_1 | cut -d ' ' -f 1` != `wc -l $input_file_2 | cut -d ' ' -f 1` ) {
+  print STDERR "Validation error: number of lines does not match between files\n";
+  print STDERR "Files: $input_file_1, $input_file_2\n";
+  die;
+}
 
 my $line_count = 0;
 while ( my $line_1 = $ifh1->getline ) {
@@ -62,15 +68,6 @@ while ( my $line_1 = $ifh1->getline ) {
     if ( $line_2 =~ m/\|/ ) {
       print STDERR "Validation error: Pipe character (\"\|\") in ID: $line_2";
       print STDERR "File: $input_file_2\n";
-      die;
-    }
-
-    $line_1 =~ s/\/1$//;
-    $line_2 =~ s/\/2$//;
-    if ( $line_2 !~ m/^$line_1$/ ) {
-      print STDERR "Validation error: FastQ ID lines do not match between mates\n";
-      print STDERR "$input_file_1: $line_1";
-      print STDERR "$input_file_2: $line_2";
       die;
     }
   }
