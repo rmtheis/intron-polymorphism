@@ -7,8 +7,8 @@ This project is under construction--please do not try to use it until it is fini
 
 ##EXTERNAL DEPENDENCIES##
 
-[Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
-[Velvet](http://http://www.ebi.ac.uk/~zerbino/velvet/)
+* [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
+* [Velvet](http://http://www.ebi.ac.uk/~zerbino/velvet/)
 
 ##INSTALLATION##
 **_Linux (64-bit)_**
