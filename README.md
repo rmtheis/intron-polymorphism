@@ -5,10 +5,10 @@
 
 This project is under construction--please do not try to use it until it is finished!
 
-##PREREQUISITES##
+##EXTERNAL DEPENDENCIES##
 
-Bowtie 2
-Velvet
+[Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
+[Velvet](http://http://www.ebi.ac.uk/~zerbino/velvet/)
 
 ##INSTALLATION##
 **_Linux (64-bit)_**
@@ -24,18 +24,23 @@ Download [here](http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-b
     cd velvet
     make
 
-#### 3. Install this project
+#### 3. Install required Perl modules
 
-    git clone git://github.com/rmtheis/intron-polymorphism intron-poly
     cpan File::Basename
     cpan IO::File
     cpan IPC::System::Simple
     cpan Sys::CPU
 
+#### 4. Install this project
+
+    git clone git://github.com/rmtheis/intron-polymorphism.git intron-poly
 
 ##RUNNING##
 
-    ip_handler.pl
+    cd intron-poly
+    ./ip_handler.pl
+
+##EXAMPLE TEST SETS##
 
 
 ##MANUAL##
