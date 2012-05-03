@@ -318,8 +318,8 @@ sub run_bowtie2_mapping {
                          "--no-discordant " . 
                          "--no-contain --no-overlap " .
                          "-k 3 -1 $reads_file_one -2 $reads_file_two " .
-                         "--al-conc $work_dir/${data_basename}_al-conc.%.fq " .
-                         "--un-conc $work_dir/${data_basename}_un-conc.%.fq " .
+                         #"--al-conc $work_dir/${data_basename}_al-conc.%.fq " .
+                         #"--un-conc $work_dir/${data_basename}_un-conc.%.fq " .
                          "-S $work_dir/${data_basename}_alignment.sam"
                        );
 
@@ -434,6 +434,8 @@ sub bowtie2_identify {
           or die "Can't create $work_dir/${data_basename}_halfmapping1.sam: $!";
   my $ofh2 = IO::File->new("$work_dir/${data_basename}_halfmapping2.sam", 'w')
           or die "Can't create $work_dir/${data_basename}_halfmapping2.sam: $!";
+  my $ofh3 = IO::File->new("$work_dir/${data_basename}_multmapping.sam", 'w')
+          or die "Can't create $work_dir/${data_basename}_multmapping.sam: $!";
   my $prev_id = "";
   my $discard_this_id = 0;
   my $mapping = 0;
@@ -453,16 +455,27 @@ sub bowtie2_identify {
     if ($mate_id ne $prev_id) {
       # This line is the first line with a new read ID
       if (scalar @print_lines == 2 && $mapping == 1 && $prev_id ne "") {
-        # Print the half-mapping mate pairs with the last line's ID
-        print $ofh shift(@print_lines); # First mate in pair
-        print $ofh shift(@print_lines); # Second mate in pair
-      } elsif (scalar @print_lines == 3 && $mapping == 2 && $prev_id ne "") {
+        
+        # Check if the pair is discordant
+        my $line1 = shift(@print_lines);
+        my @fd1 = split(/\t/, $line1);
+        my $flag1 = $fd1[1];
+        my $line2 = shift(@print_lines);
+        my @fd2 = split(/\t/, $line2);
+        my $flag2 = $fd2[1];
+        if ( &_isDiscordant($flag1, $flag2) ) {
+          print $ofh2 "$line1$line2";
+        } else {
+          # Print the half-mapping mate pairs with the last line's ID
+          print $ofh "$line1$line2";
+        }
+      } elsif (scalar @print_lines == 3 && $prev_id ne "") {
         # Print the trio where two mates align concordantly, and one has a secondary alignment
         foreach my $ln (@print_lines) {
-          print $ofh2 $ln;
+          print $ofh3 $ln;
         }
         @print_lines = ();
-      }
+      } # Note: can print cases of multiple (>3/pair) alignments by extending this if-else block
       $discard_this_id = 0;
       $prev_id = $mate_id;
     } else {
@@ -505,6 +518,7 @@ sub bowtie2_identify {
   $ifh->close;
   $ofh->close;
   $ofh2->close;
+  $ofh3->close;
 }
 
 # =head2 find_distant_alignments
@@ -739,7 +753,7 @@ sub group {
 
   # Sort by alignment positionn
   my $results = capture( "cat $work_dir/${data_basename}_filtered.sam " .
-                         "$work_dir/${data_basename}_halfmapping2.sam " .
+                         #"$work_dir/${data_basename}_halfmapping2.sam " .
                          "> $work_dir/${data_basename}_halfmapping_all.sam" );
   if ( $EXITVAL != 0 ) {
     die "$0: cat exited unsuccessful";
@@ -919,6 +933,19 @@ sub _isMapping {
 sub _isNonMapping {
   my $flag = shift;
   if( $flag == 77 || $flag == 141 ) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+# Returns 1 if the given pair of sum-of-flags values represents mates that align discordantly, otherwise returns 0
+sub _isDiscordant {
+  my $flag1 = shift;
+  my $flag2 = shift;
+
+  if( ($flag1 == 73 && $flag2 == 153 ) || ($flag1 == 153 && $flag2 == 73) ||
+      ($flag1 == 89 && $flag2 == 137 ) || ($flag1 == 137 && $flag2 == 89)) {
     return 1;
   } else {
     return 0;
