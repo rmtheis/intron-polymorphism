@@ -1,0 +1,8 @@
+*.fq
+*.gz
+bowtie*
+run-*
+velvet*
+genomes/
+reads/
+testdata/
