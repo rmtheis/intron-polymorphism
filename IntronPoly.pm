@@ -302,6 +302,8 @@ sub run_bowtie1_mapping {
 sub run_bowtie2_mapping {
   my $self = shift;
   my $num_threads = shift;
+  my $minins = shift;
+  my $maxins = shift;
   my $data_basename = $self->{"data_basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $bowtie2_dir = $self->{"bowtie_db"}->{"bowtie2_dir"};
@@ -314,7 +316,7 @@ sub run_bowtie2_mapping {
   # Call bowtie to run the mapping
   my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
                          "--threads $num_threads --reorder --sam-no-hd " .
-                         "--maxins 500 --minins 100 " .
+                         "--maxins $maxins --minins $minins " .
                          "--no-discordant " . 
                          "--no-contain --no-overlap " .
                          "-k 3 -1 $reads_file_one -2 $reads_file_two " .

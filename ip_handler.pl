@@ -50,18 +50,23 @@ my $bowtie2_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta5";
 # Directory name where existing bowtie index files may be located
 my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
 
-# Number of threads to use when running bowtie
-#my $bowtie_num_threads = Sys::CPU::cpu_count();
-my $bowtie_num_threads = 3;
+# Default -I/--minins <int> value for Bowtie
+my $minins = 100;
+
+# Default -X/--maxins <int> value for Bowtie
+my $maxins = 3000;
+
+###########################
+# INITIALIZE THE PIPELINE #
+###########################
 
 # Check for invalid input
 if ($data_basename eq "") {
   print "Error: data_basename not initialized. Set a value for data_basename.\n";
 }
 
-###########################
-# INITIALIZE THE PIPELINE #
-###########################
+# Set default number of threads to number of available cores
+my $bowtie_num_threads = Sys::CPU::cpu_count();
 
 # Parse command-line options, overriding any default options set above
 GetOptions(
@@ -121,7 +126,7 @@ $project->build_bowtie2_index();
 
 # Map the reads to the reference genome to identify unaligning pairs
 #$project->run_bowtie1_mapping( $bowtie_num_threads );
-$project->run_bowtie2_mapping( $bowtie_num_threads );
+$project->run_bowtie2_mapping( $bowtie_num_threads, $minins, $maxins );
 
 COLLECTION:
 print "Running COLLECTION...\n";
