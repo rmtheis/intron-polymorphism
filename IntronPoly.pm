@@ -599,7 +599,7 @@ sub filter {
   my $mate_length = 16;
 
   # Define length of read pair for fake paired-end alignment
-  my $read_length = 500;
+  my $read_length = 500; # TODO get this from infer_fraglen.pl
 
   # Boolean to track whether we have any half-mapping pairs
   my $have_candidates = 0;
@@ -747,11 +747,8 @@ sub group {
   # Expected intron length
   my $intron_length = 250;
 
-  # Read length
-  my $read_length = 500;
-
-  # Mate length
-  my $mate_length = 125; # TODO get this from SAM
+  # Insert length
+  my $ins = 100;
 
   # Sort by alignment positionn
   my $results = capture( "cat $work_dir/${data_basename}_filtered.sam " .
@@ -760,36 +757,68 @@ sub group {
   if ( $EXITVAL != 0 ) {
     die "$0: cat exited unsuccessful";
   }
-  $results = capture( "sort -k 4,4 -n -o $work_dir/${data_basename}_halfmapping_all_sorted.sam " .
+  $results = capture( "sort -k 8,8 -n -o $work_dir/${data_basename}_halfmapping_all_sorted.sam " .
                          "$work_dir/${data_basename}_halfmapping_all.sam" );
   if ( $EXITVAL != 0 ) {
     die "$0: sort exited unsuccessful";
   }
 
   # Get the clusters one at a time
-  my $ifh = new IO::File("$work_dir/${data_basename}_filtered.sam", 'r')
-          or die "$0: Can't open $work_dir/${data_basename}_filtered.sam: $!";
+  my $ifh = new IO::File("$work_dir/${data_basename}_halfmapping_all_sorted.sam", 'r')
+          or die "$0: Can't open $work_dir/${data_basename}_halfmapping_all_sorted.sam: $!";
   my @cluster;
   my $have_cluster = 0;
   my $last_pos = 0;
-  my $overlap_dist = 2 * (($read_length - 2 * $mate_length) + $intron_length);
+  my $overlap_dist = 2 * $ins + $intron_length;
  
   my $id;
+  my $flag;
   my $pos; 
+  my $seq;
   while( my $line = $ifh->getline ) {
-    if( $line =~  m/^(\S+)\s\d+\s\S+\s\S+\s\S+\s\S+\s\S+\s(\S+)/ ) {
+    if( $line =~  m/^(\S+)\s(\d+)\s\S+\s\S+\s\S+\s\S+\s\S+\s(\S+)\s\S+\s(\S+)/ ) {
       $id = $1;
-      $pos = $2;
+      $flag = $2;
+      $pos = $3;
+      $seq = $4;
     } else {
       next;
     }
     
-    # Add or discard based on position
+    # Add or discard based on position, treating upstream mates differently from downstream mates
+    if( ($flag & 20) == 0 ) {
+      if( ($pos - $last_pos) < $overlap_dist ) {
+        push( @cluster, $line );
+        print "before: last_pos=$last_pos, pos=$pos\n";
+        $last_pos = $pos;
+        print "after: last_pos=$last_pos, pos=$pos\n";
+        next;
+      }
+      $last_pos = $pos;
+    } else {
+      if( ($pos - $last_pos) < ($ins - length($seq) + $intron_length) ) {
+        push( @cluster, $line );
+        $last_pos = $pos;
+        next;
+      }
+      $last_pos = $pos;
+    }
 
-    # Run velvet on the reads one at a time using stdout
-
-    # velveth $work_dir/velvet-results-separate-dir 13 -sam -shortPaired 
-
+    # Run velvet on groups of 2 or more reads using stdout
+    if( scalar(@cluster) >= 2 ) {
+      # velveth $work_dir/velvet-results-separate-dir 13 -sam -shortPaired 
+      $results = capture( "velveth $work_dir/velvet-results 13 -sam -shortPaired" );
+      print "Running velvet on cluster:\n";
+      while( scalar(@cluster) > 0 ) {
+        my $l = shift(@cluster);
+        print $l;
+      }
+      if ( $EXITVAL != 0 ) {
+        die "$0: velveth exited unsuccessful";
+      }
+    } else {
+      @cluster = ();
+    }
   }
   $ifh->close;
 

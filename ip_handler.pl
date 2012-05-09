@@ -41,7 +41,7 @@ my $reads_dir = "/home/theis/intron-polymorphism/testdata";
 
 # Base of the unmapped reads filenames, without "_1.fq" or "_2.fq" extension (FastQ format)
 # This base filename will be used for all data subsequently generated from these reads.
-my $data_basename = "E10_000_000";
+my $data_basename = "E100000";
 
 # Directory name where the bowtie executables are located
 my $bowtie1_dir = "/home/theis/intron-polymorphism/bowtie-0.12.7";
@@ -49,6 +49,9 @@ my $bowtie2_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta5";
 
 # Directory name where existing bowtie index files may be located
 my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
+
+# Directory name where the Velvet executable is located
+#my $velvet_dir = "/home/theis/intron-polymorphism/velvet";
 
 # Default -I/--minins <int> value for Bowtie
 my $minins = 100;
