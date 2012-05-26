@@ -26,8 +26,6 @@ Download [here](http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-b
 
 #### 3. Install required Perl modules
 
-    cpan File::Basename
-    cpan IO::File
     cpan IPC::System::Simple
     cpan Sys::CPU
 

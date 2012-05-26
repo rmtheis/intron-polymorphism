@@ -74,6 +74,12 @@ sub set_work_dir {
     print "Using existing work directory $work_dir\n";
   }
   $self->{"work_dir"} = $work_dir;
+  
+  my $velvet_dir = "$work_dir/velvet-data";
+  unless (-d $velvet_dir) {
+    &_make_dir( $velvet_dir );
+    print "Created velvet directory $velvet_dir\n";
+  }
   return $work_dir;
 }
 
@@ -762,7 +768,7 @@ sub group {
   if ( $EXITVAL != 0 ) {
     die "$0: sort exited unsuccessful";
   }
-
+  
   # Get the clusters one at a time
   my $ifh = new IO::File("$work_dir/${data_basename}_halfmapping_all_sorted.sam", 'r')
           or die "$0: Can't open $work_dir/${data_basename}_halfmapping_all_sorted.sam: $!";
@@ -775,6 +781,7 @@ sub group {
   my $flag;
   my $pos; 
   my $seq;
+  my $count = 0;
   while( my $line = $ifh->getline ) {
     if( $line =~  m/^(\S+)\s(\d+)\s\S+\s\S+\s\S+\s\S+\s\S+\s(\S+)\s\S+\s(\S+)/ ) {
       $id = $1;
@@ -803,24 +810,38 @@ sub group {
       }
       $last_pos = $pos;
     }
-
-    # Run velvet on groups of 2 or more reads using stdout
-    if( scalar(@cluster) >= 2 ) {
-      # velveth $work_dir/velvet-results-separate-dir 13 -sam -shortPaired 
-      $results = capture( "velveth $work_dir/velvet-results 13 -sam -shortPaired" );
-      print "Running velvet on cluster:\n";
+    
+    # Run velveth on groups of 2 or more reads using stdout
+    if( scalar(@cluster) >= 2 ) {    
+      # Open output file
+      ++$count;
+      my $ofh = new IO::File("$work_dir/velvet-data/${data_basename}_cluster_$count.txt", 'w')
+            or die "$0: Can't open $work_dir/velvet-data/${data_basename}_cluster_$count.txt: $!";
+      
       while( scalar(@cluster) > 0 ) {
-        my $l = shift(@cluster);
-        print $l;
+        print $ofh shift(@cluster);
       }
+      $ofh->close();
+      $results = capture( "velveth $work_dir/velvet-data/cluster_$count 13 -sam -short " .
+              "$work_dir/velvet-data/${data_basename}_cluster_$count.txt" );
       if ( $EXITVAL != 0 ) {
         die "$0: velveth exited unsuccessful";
+      }
+      # Delete the SAM file of read data unless we're debugging
+      #unlink( "$work_dir/velvet-data/${data_basename}_cluster_$count.txt" ) if !DEBUG
+      #        or die "$0: cannot delete $work_dir/velvet-data/${data_basename}_cluster_$count.txt";
+      
+      # Run velvetg on groups
+      $results = capture( "velvetg $work_dir/velvet-data/cluster_${count}/");
+      if ( $EXITVAL != 0 ) {
+        die "$0: velvetg exited unsuccessful";
       }
     } else {
       @cluster = ();
     }
+    
+
   }
-  $ifh->close;
 
 }
 

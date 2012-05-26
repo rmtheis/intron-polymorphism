@@ -163,7 +163,7 @@ $project->group();
 #ANALYSIS:
 
 # Copy latest run to "run-latest" directory for quickly locating the last-run results
-system( "rm run-latest/*" );
-system( "cp $work_dir/* run-latest" );
+system( "rm -rf run-latest/*" );
+system( "cp -R $work_dir/* run-latest" );
 
 exit;
