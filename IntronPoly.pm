@@ -87,11 +87,13 @@ sub set_work_dir {
 =head2 build_db
 
  Title   : build_db
- Usage   :
- Function:
- Example : 
- Returns : 
- Args    :
+ Usage   : $project->build_db( "path_to_reference_genome", "read_pairs_base_name" )
+ Function: Sets references to data files used in multiple steps in the pipeline
+ Example : my $ref_genome = "/home/theis/genome/mygenome.fna";
+           $project->build_db( $ref_genome, "reads" );
+ Returns : No return value
+ Args    : Scalar of full path to the reference genome Fasta file, and a scalar of the base
+           name of the read pairs files (filename without "_1.fq" or "_2.fq" ending)
 
 =cut
 
@@ -113,11 +115,17 @@ sub build_db {
 =head2 mapping_setup
 
  Title   : mapping_setup
- Usage   :
- Function:
- Example : 
- Returns : 
- Args    :
+ Usage   : $project->mapping_setup( "bowtie2dir", "bowtie_index_dir", "reads_dir", "read_pairs_base_name")
+ Function: Sets references to data files used for mapping reads to the reference genome
+ Example : my $bowtie_dir = "/home/theis/bowtie2-2.0.0-beta6/";
+           my $index_dir = "/home/theis/bt2/";
+           my $reads_dir = "/home/theis/reads/";
+           $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
+ Returns : No return value
+ Args    : Scalar full path to the Bowtie 2 executable directory, scalar full path to the Bowtie 2
+           index directory, scalar full path to the directory containing the Fastq read pairs files,
+           and a scalar of the base name of the read pairs files (filename without "_1.fq" or
+           "_2.fq" ending)
 
 =cut
 
@@ -183,11 +191,12 @@ sub mapping_setup {
 =head2 build_bowtie2_index
 
  Title   : build_bowtie2_index
- Usage   :
- Function:
- Example :
- Returns :
- Args    :
+ Usage   : $project->build_bowtie2_index();
+ Function: Runs the bowtie2-build indexer to create a Bowtie index from the reference genome
+ Example : $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
+           $project->build_bowtie2_index();
+ Returns : No return value
+ Args    : No arguments
 
 =cut
 
@@ -222,11 +231,14 @@ sub build_bowtie2_index {
 =head2 run_bowtie2_mapping
 
  Title   : run_bowtie2_mapping
- Usage   : 
- Function: 
- Example : 
- Returns : 
- Args    : 
+ Usage   : $project->run_bowtie2_mapping( num_threads, minins, maxins )
+ Function: Aligns reads to the reference genome and saves output file
+ Example : $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
+           $project->build_bowtie2_index();
+           $project->run_bowtie2_mapping( 8, 100, 500 );
+ Returns : No return value
+ Args    : Number of parallel search threads to use for Bowtie 2, numeric length to use for
+           Bowtie 2 -I/--minins parameter, numeric length to use for Bowtie 2 -X/--maxins parameter
 
 =cut
 
@@ -268,11 +280,13 @@ sub run_bowtie2_mapping {
 =head2 bowtie2_identify
 
  Title   : bowtie2_identify
- Usage   : 
- Function: Using alignment results, identifies half-mapping read pairs with no secondary alignments
- Example : 
- Returns : 
- Args    : 
+ Usage   : $project->bowtie2_identify( $num_threads )
+ Function: Identifies half-mapping read pairs from the read alignment output file
+ Example : $project->build_bowtie2_index();
+           $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
+           $project->bowtie2_identify();
+ Returns : No return value
+ Args    : No argumnets
 
 =cut
 
@@ -403,11 +417,13 @@ sub bowtie2_identify {
 =head2 filter
 
  Title   : filter
- Usage   : 
- Function: 
- Example : 
- Returns : 
- Args    : 
+ Usage   : $project->filter( $num_threads )
+ Function: Reduces the number of half-mapping read pairs by re-running alignments using looser
+           matching criteria.
+ Example : $project->bowtie2_identify();
+           $project->filter( 8 );
+ Returns : No return value
+ Args    : Number of parallel search threads to use for Bowtie 2
 
 =cut
 
@@ -576,11 +592,14 @@ sub filter {
 =head2 group
 
  Title   : group
- Usage   : 
- Function: 
- Example : 
- Returns : 
- Args    : 
+ Usage   : $project->group()
+ Function: Gathers groups of half-mapping read pairs that align to the reference genome at locations
+           near one another, and performs a local assembly on the unaligned mates in each group
+ Example : $project->bowtie2_identify();
+           $project->filter( 8 );
+           $project->group();
+ Returns : No return value
+ Args    : No arguments
 
 =cut
 
