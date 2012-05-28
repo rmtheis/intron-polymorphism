@@ -131,7 +131,6 @@ sub build_db {
 
 sub mapping_setup {
   my $self                = shift;
-  my $bowtie1_dir         = shift;
   my $bowtie2_dir         = shift;
   my $bowtie_index_dir    = shift;
   my $reads_dir           = shift;
@@ -177,7 +176,6 @@ sub mapping_setup {
 
   # Remember paths needed for running bowtie
   $self->{"bowtie_db"} = {
-    bowtie1_dir      => $bowtie1_dir,
     bowtie2_dir      => $bowtie2_dir,
     bowtie_index_dir => $bowtie_index_dir,
     reads_file_one   => $reads_file_one,

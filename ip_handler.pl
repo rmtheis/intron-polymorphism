@@ -146,8 +146,7 @@ if ($mapping_setup_completed != 1) {
 }
 
 # Identify all the half-mapping read pairs
-#$project->bowtie1_identify( $bowtie_num_threads );
-$project->bowtie2_identify( $bowtie_num_threads );
+$project->bowtie2_identify();
 
 FILTERING:
 print "Running FILTERING...\n";
