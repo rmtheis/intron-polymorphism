@@ -296,14 +296,12 @@ sub bowtie2_identify {
   my @print_lines;
   while( my $line = $ifh->getline ) {
     # Ensure we're reading an alignment line and not a header line
-    my $mate_id;
-    my $flag_sum;
-    if( $line =~ m/^(\S+)\s(\d+).*/ ) {
-      $mate_id = $1;
-      $flag_sum = $2;
-    } else {
+    if ($line =~ m/^@/) {
       next;
     }
+    my @fields = split(/\t/, $line);
+    my $mate_id = $fields[0];
+    my $flag_sum = $fields[1];
   
     # Check if this mate ID is different from the last line
     if ($mate_id ne $prev_id) {
@@ -411,15 +409,14 @@ sub filter {
 
   # Get the mates we want and write them as fake paired-end reads to FastQ
   while( my $line = $ifh->getline ) {
-    my ( $id, $flag_sum, $sequence, $quality_scores );
-    if( $line =~ m/^(\S+)\s(\d+)\s\S+\s\S+\s\S+\s\S+\s\S+\s\S+\s\S+\s(\S+)\s(\S+)\s.*/ ) {
-      $id = $1;
-      $flag_sum = $2;
-      $sequence = $3;
-      $quality_scores = $4;
-    } else {
+    if ($line =~ m/^@/) {
       next;
     }
+    my @fields = split(/\t/, $line);
+    my $id = $fields[0];
+    my $flag_sum = $fields[1];
+    my $sequence = $fields[9];
+    my $quality_scores = $fields[10];
 
     # Create a fake pair from the unaligned mate in the pair
     if( &_isUnalignedMate($flag_sum) ) {
@@ -477,16 +474,13 @@ sub filter {
 
   # Get an alignment from the originally half-mapping pairs
   while( my $line = $ifh2->getline ) {
-    my $orig_id;
-    my $orig_flag_sum;
-    my $other_mate_pos;
-    if( $line =~  m/^(\S+)\s(\d+)\s\S+\s\S+\s\S+\s\S+\s\S+\s(\S+)/ ) {
-      $orig_id = $1;
-      $orig_flag_sum = $2;
-      $other_mate_pos = $3;
-    } else {
+    if ($line =~ m/^@/) {
       next;
     }
+    my @fields = split(/\t/, $line);
+    my $orig_id = $fields[0];
+    my $orig_flag_sum = $fields[1];
+    my $other_mate_pos = $fields[7];
 
     # Consider only the unaligned mate from the half-mapping read pair
     if( !&_isUnalignedMate($orig_flag_sum) ) {
@@ -495,20 +489,17 @@ sub filter {
 
     # Get the corresponding alignment from the fake pairs
     while (my $fake_line = $ifh->getline) {
-      my $id;
-      my $pos;
-      if( $fake_line =~ m/^(\S+)\s\d+\s\S+\s(\S+).*/ ) {
-        $id = $1;
-        $pos = $2;
-      } else {
+      if ($fake_line =~ m/^@/) {
         next;
       }
+      my @fields = split(/\t/, $fake_line);
+      my $id = $fields[0];
+      my $pos = $fields[3];
       while( $id ne $orig_id ) {
         $fake_line = $ifh->getline;
-        if( $fake_line =~ m/(\S+)\s\d+\s\S+\s(\S+).*/ ) {
-          $id = $1;
-          $pos = $2;
-        }
+        my @fields = split(/\t/, $fake_line);
+        $id = $fields[0];
+        $pos = $fields[3];
       }
 
       print $ofh2 "\nFAKE PAIR ALIGNMENT LINE 1: $fake_line" if DEBUG;
@@ -582,14 +573,14 @@ sub group {
   my $seq;
   my $count = 0;
   while( my $line = $ifh->getline ) {
-    if( $line =~  m/^(\S+)\s(\d+)\s\S+\s\S+\s\S+\s\S+\s\S+\s(\S+)\s\S+\s(\S+)/ ) {
-      $id = $1;
-      $flag = $2;
-      $pos = $3;
-      $seq = $4;
-    } else {
+    if ($line =~ m/^@/) {
       next;
     }
+    my @fields = split(/\t/, $line);
+    $id = $fields[0];
+    $flag = $fields[1];
+    $pos = $fields[7];
+    $seq = $fields[9];
     
     # Add or discard based on position, treating upstream mates differently from downstream mates
     if( ($flag & 20) == 0 ) {
