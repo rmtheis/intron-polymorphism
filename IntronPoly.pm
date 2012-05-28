@@ -529,7 +529,8 @@ sub filter {
     }
 
     # Get the corresponding alignment from the fake pairs
-    while ( my $fake_line = $ifh->getline ) {
+    my $fake_line;
+    while ( $fake_line = $ifh->getline ) {
       if ( $fake_line =~ m/^@/ ) {
         next;
       }
