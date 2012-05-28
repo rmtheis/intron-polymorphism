@@ -375,53 +375,6 @@ sub bowtie2_identify {
   $ofh3->close;
 }
 
-# =head2 find_distant_alignments
-# 
-#  Title   : find_distant_alignments
-#  Usage   : 
-#  Function: Run Bowtie to find read pairs where both mates align concordantly, but far from one another
-#  Example : 
-#  Returns : 
-#  Args    : 
-# 
-# =cut
-# 
-# sub find_distant_alignments {
-#   my $self = shift;
-#   my $num_threads = shift;
-#   my $data_basename = $self->{"data_basename"};
-#   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-#   my $bowtie2_dir = $self->{"bowtie_db"}->{"bowtie2_dir"};
-#   my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
-#   my $reads_file_one = $self->{"bowtie_db"}->{"reads_file_one"};
-#   my $reads_file_two = $self->{"bowtie_db"}->{"reads_file_two"};
-#   my $work_dir = $self->{"work_dir"};
-#   print "Running mapping using bowtie2 to find distant alignments, using $num_threads threads...\n";
-# 
-#   # Combine the read pairs files into one file with unique IDs for unpaired mapping
-#   my $unpaired_reads_file = "$work_dir/${data_basename}_unpaired.fq";
-#   &_combine_fastq( $reads_file_one, $reads_file_two, $unpaired_reads_file );
-# 
-# 
-#   # Call bowtie to run the mapping as unpaired reads
-#   my $results = capture( "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename " .
-#                          "--threads $num_threads --reorder --sam-no-hd " .
-#                          "--no-discordant --no-contain --no-overlap " .
-#                          "-k 3 -U $reads_file_one,$reads_file_two " .
-#                          #"--al-conc $work_dir/${data_basename}_al-conc.%.fq " .
-#                          #"--un-conc $work_dir/${data_basename}_un-conc.%.fq " .
-#                          "-S $work_dir/${data_basename}_halfmapping3.sam.tmp"
-#                        );
-#
-#  if( $EXITVAL != 0 ) {
-#    die "$0: bowtie2 exited unsuccessful";
-#  }
-# 
-#   # Parse the alignments file to compare distances between reads
-# 
-#   print "debug: find_distant_alignments() done.\n";
-# }
-
 =head2 filter
 
  Title   : filter
@@ -779,23 +732,6 @@ sub _isUnalignedMate {
     return 1;
   } else {
     return 0;
-  }
-}
-
-# Combines two FastQ files, appending "-1" and "-2" to the read IDs for uniqueness
-sub _combine_fastq {
-  my $input_file1 = shift;
-  my $input_file2 = shift;
-  my $output_file = shift;
-  my $ifh1 = new IO::File($input_file1, 'r') or die "$0: Can't open $input_file1: $!";
-  my $ifh2 = new IO::File($input_file2, 'r') or die "$0: Can't open $input_file2: $!";
-  my $ofh = new IO::File($output_file, 'w') or die "$0: Can't open $output_file: $!";
-
-  while ( my $line = $ifh1->getline ) {
-    print $ofh $line; #TODO change the IDs. Put "-1" before any "/1"
-  }
-  while ( my $line = $ifh2->getline ) {
-    print $ofh $line; #TODO change the IDs.
   }
 }
 
