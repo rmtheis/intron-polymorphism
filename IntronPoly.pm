@@ -178,42 +178,6 @@ sub mapping_setup {
   print "Using reads file 2: $reads_file_two\n";
 }
 
-=head2 build_bowtie1_index
-
- Title   : build_bowtie1_index
- Usage   :
- Function:
- Example : 
- Returns : 
- Args    :
-
-=cut
-
-sub build_bowtie1_index {
-  my $self = shift;
-  my $ref_genome = $self->{"ref_genome"}->{"full_pathname"};
-  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie1_dir = $self->{"bowtie_db"}->{"bowtie1_dir"};
-  my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
-  unless (-e "$bowtie_index_dir/$ref_genome_basename.1.ebwt" &&
-             "$bowtie_index_dir/$ref_genome_basename.2.ebwt" &&
-             "$bowtie_index_dir/$ref_genome_basename.3.ebwt" &&
-             "$bowtie_index_dir/$ref_genome_basename.4.ebwt" &&
-             "$bowtie_index_dir/$ref_genome_basename.rev.1.ebwt" &&
-             "$bowtie_index_dir/$ref_genome_basename.rev.2.ebwt") {
-    # Call bowtie-build to create the bowtie index
-    print "Creating bowtie index in $bowtie_index_dir...\n";
-    my $results = capture( "$bowtie1_dir/bowtie-build " .
-                           "$ref_genome $bowtie_index_dir/$ref_genome_basename" );
-    if ( $EXITVAL != 0 ) {
-      die "$0: bowtie-build exited unsuccessful";
-    }
-  } else {
-    print "Bowtie1 index already exists, not re-creating.\n";
-    print "Using Bowtie1 index at $bowtie_index_dir/$ref_genome_basename.*\n";
-  }
-}
-
 =head2 build_bowtie2_index
 
  Title   : build_bowtie2_index
@@ -248,50 +212,6 @@ sub build_bowtie2_index {
     print "Bowtie2 index already exists, not re-creating.\n";
     print "Using Bowtie2 index at $bowtie_index_dir/$ref_genome_basename.*\n";
   }
-}
-
-=head2 run_bowtie1_mapping
-
- Title   : run_bowtie1_mapping
- Usage   : 
- Function: 
- Example : 
- Returns : 
- Args    : 
-
-=cut
- 
-sub run_bowtie1_mapping {
-  my $self = shift;
-  my $num_threads = shift;
-  my $data_basename = $self->{"data_basename"};
-  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie1_dir = $self->{"bowtie_db"}->{"bowtie1_dir"};
-  my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
-  my $reads_file_one = $self->{"bowtie_db"}->{"reads_file_one"};
-  my $reads_file_two = $self->{"bowtie_db"}->{"reads_file_two"};
-  my $work_dir = $self->{"work_dir"};
-  print "Running mapping using bowtie1, using $num_threads threads...\n";
-
-  # Call bowtie to run the mapping
-  my $results = capture( "$bowtie1_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
-                         "--threads $num_threads --suppress 3,6 --time " .
-                         "--un $work_dir/${data_basename}_unaligned " . 
-                         "-m 1 -1 $reads_file_one -2 $reads_file_two " .
-                         "--al $work_dir/${data_basename}_aligned " .
-                         "$work_dir/${data_basename}_hits.map"
-                       );
-
-  if( $EXITVAL != 0 ) {
-    die "$0: bowtie1 exited unsuccessful";
-  }
-
-  # Sort aligning reads by match position
-  #print "Sorting aligned reads by hit position...\n";
-  #$results = capture( "sort -k 3,3 --sort=n $work_dir/hits.map -o $work_dir/hits_sorted.map" );
-  #if( $EXITVAL != 0 ) {
-  #  die "$0: sort exited unsuccessful";
-  #}
 }
 
 =head2 run_bowtie2_mapping
@@ -335,80 +255,6 @@ sub run_bowtie2_mapping {
     die "$0: bowtie2 exited unsuccessful";
   }
 
-}
-
-=head2 bowtie1_identify
-
- Title   : bowtie1_identify
- Usage   : 
- Function: Identifies the half-mapping read pairs from Bowtie 1 run data
- Example : 
- Returns : 
- Args    : 
-
-=cut
-
-sub bowtie1_identify {
-  my $self = shift;
-  my $num_threads = shift;
-  my $data_basename = $self->{"data_basename"};
-  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie1_dir = $self->{"bowtie_db"}->{"bowtie1_dir"};
-  my $bowtie_index_dir = $self->{"bowtie_db"}->{"bowtie_index_dir"};
-  my $work_dir = $self->{"work_dir"};
-
-  # Identify the half-mapping read pairs. Read pairs are already those that align uniquely to the
-  # reference sequence because Bowtie 1 was run with option '-m 1'.
-  print "Running bowtie to identify half-mapping read pairs...\n";
-  my $results = capture( "$bowtie1_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
-                         "--threads $num_threads --suppress 3,6 " .
-                         "-m 1 $work_dir/${data_basename}_unaligned_1 " . 
-                         "--al $work_dir/${data_basename}_1_halfmapping.1.fq " . 
-                         #"--un $work_dir/mate1_unaligned .
-                         "$work_dir/${data_basename}_mate1_hits.map"
-                       );
-
-  $results = capture( "$bowtie1_dir/bowtie $bowtie_index_dir/$ref_genome_basename " .
-                         "--threads $num_threads --suppress 3,6 " .
-                         "-m 1 $work_dir/${data_basename}_unaligned_2 " . 
-                         "--al $work_dir/${data_basename}_2_halfmapping.2.fq " . 
-                         #"--un $work_dir/mate2_unaligned " . 
-                         "$work_dir/${data_basename}_mate2_hits.map"
-                       );
-
-  # Gather the corresponding mates that are paired with our identified half-mapping mates
-  print "Gathering mates...\n";
-  _find_mates("$work_dir/${data_basename}_1_halfmapping.1.fq",
-              "$work_dir/${data_basename}_unaligned_2",
-              "$work_dir/${data_basename}_1_halfmapping.2.fq");
-  _find_mates("$work_dir/${data_basename}_2_halfmapping.2.fq",
-              "$work_dir/${data_basename}_unaligned_1",
-              "$work_dir/${data_basename}_2_halfmapping.1.fq");
-
-  # Concatenate the results
-  system( "cat $work_dir/${data_basename}_1_halfmapping.1.fq " .
-          "$work_dir/${data_basename}_2_halfmapping.1.fq > " .
-          "$work_dir/${data_basename}_halfmapping.1.fq_unsorted.tmp" );
-  unlink "$work_dir/${data_basename}_1_halfmapping.1.fq" 
-          or die "Can't delete $work_dir/${data_basename}_1_halfmapping.1.fq: $!";
-  system( "cat $work_dir/${data_basename}_1_halfmapping.2.fq " .
-          "$work_dir/${data_basename}_2_halfmapping.2.fq > " .
-          "$work_dir/${data_basename}_halfmapping.2.fq_unsorted.tmp" );
-  unlink "$work_dir/${data_basename}_2_halfmapping.2.fq"
-          or die "Can't delete $work_dir/${data_basename}_2_halfmapping.2.fq: $!";
-
-  # Sort our mates by ID and save the sorted output files
-  _sort_fastq_by_id( "$work_dir/${data_basename}_halfmapping.1.fq_unsorted.tmp", 
-                     "$work_dir/${data_basename}_halfmapping.1.fq" );
-  unlink "$work_dir/${data_basename}_halfmapping.1.fq_unsorted.tmp" 
-          or die "Can't delete $work_dir/${data_basename}_halfmapping.1.fq_unsorted.tmp: $!";
-  _sort_fastq_by_id( "$work_dir/${data_basename}_halfmapping.2.fq_unsorted.tmp", 
-                     "$work_dir/${data_basename}_halfmapping.2.fq" );
-  unlink "$work_dir/${data_basename}_halfmapping.2.fq_unsorted.tmp" 
-          or die "Can't delete $work_dir/${data_basename}_halfmapping.2.fq_unsorted.tmp: $!";
-  print "Half-mapping read pairs are saved:\n";
-  print "Created $work_dir/${data_basename}_halfmapping.1.fq\n";
-  print "Created $work_dir/${data_basename}_halfmapping.2.fq\n";
 }
 
 =head2 bowtie2_identify
@@ -847,87 +693,6 @@ sub group {
 
 ############ Subroutines for internal use by this module ############
 
-# _find_mates: Identify corresponding (paired) mates for the given file of mates
-# Arguments: 1. Unmatched mates file 2. File with candidate mates to search 3. Output file
-# Note: Matches in output file are unsorted, so may be listed in a different order.
-sub _find_mates {
-  my $unpaired_mates = shift;
-  my $candidate_mates = shift;
-  my $output_file = shift;
-
-  # Open the unpaired mates file
-  my $ifh = new IO::File($unpaired_mates, 'r') or die "$0: Can't open $unpaired_mates: $!";
-
-  # Loop through the unpaired mates file and get all the search IDs
-  my $line_count = 0;
-  my $line = 0;
-  my $combined_search = "";
-  while ( my $unpaired_line = $ifh->getline ) {
-    my $id;
-    $line++;
-    if ( $line_count == 0 ) {
-      $id = substr( $unpaired_line, 1 );
-      chomp( $id );
-      $id =~ s/\/[12]$//;
-
-      # Append this ID to the combined search string
-      if ( $combined_search ne "" ) {
-        $combined_search = $combined_search . "|$id"; 
-      } else {
-        $combined_search = $id;
-      }
-    }
-    $line_count = ($line_count + 1) % 4;
-  }
-  $ifh->close;
-
-  # Open the file containing all potential mates
-  my $ifhb = new IO::File($candidate_mates, 'r') or die "$0: Can't open $candidate_mates: $!";
-
-  # Open the output file for writing
-  my $ofh = IO::File->new($output_file, "w") or die "$0: Can't create $output_file: $!";
-
-  # Find and save the entries for all IDs in the combined search string 
-  $line_count = 0;
-  my $save_flag = 0;
-  while ( my $candidate_line = $ifhb->getline ) {
-    if ( $line_count == 0 ) {
-      # Find the pairing mate for that ID in the candidate mates file
-      $save_flag = 0;
-      if ( $candidate_line =~ m/$combined_search/ && $combined_search ne "") {
-
-        # Set the flag to print all lines for this mate to the output file
-        $save_flag = 1;
-
-        # Get the ID that matched
-        my $id;
-        $id = substr( $candidate_line, 1 );
-        chomp( $id );
-        $id =~ s/\/[12]$//;
-       
-        # Remove the ID that matched from the combined search string
-        $combined_search =~ s/\|\Q$id\E\|/\|/g; # Match in middle of line
-        $combined_search =~ s/^\Q$id\E\|//g; # Match at beginning of line
-        $combined_search =~ s/\|\Q$id\E$//g; # Match at end of line
-        $combined_search =~ s/^\Q$id\E$//; # Match whole line
-      }
-    }
-    $line_count = ($line_count + 1) % 4;
-
-    # Write this line to the output file if it's a match
-    if ( $save_flag == 1 ) {
-      print $ofh $candidate_line;
-    }
-  }
-  $ifhb->close;
-  $ofh->close;
-
-  # Make sure we found all the mates we were looking for
-  if ( $combined_search ne "") {
-    die "$0: mates not found in $candidate_mates: $combined_search\n";
-  }
-}
-
 # Returns the reverse complement of the given string
 sub _reverseComplement {
   my ($value) = shift;
@@ -1032,51 +797,6 @@ sub _combine_fastq {
   while ( my $line = $ifh2->getline ) {
     print $ofh $line; #TODO change the IDs.
   }
-}
-
-# Sorts the entries in a FastQ file by their identifiers using Unix sort
-sub _sort_fastq_by_id {
-  my $input_file = shift;
-  my $output_file = shift;
-  my $linearized_file = $input_file . "_linearized.tmp";
-  my $linearized_sorted_file = $linearized_file . "_sorted.tmp";
-  my $ifh = new IO::File($input_file, 'r') or die "$0: Can't open $input_file: $!";
-  my $lfh = IO::File->new($linearized_file, "w") or die "$0: Can't create $linearized_file: $!";
-
-  # Linearize the file by merging multiple lines into one
-  my $line_count = 0;
-  while ( my $line = $ifh->getline ) {  
-    chomp($line);
-    print $lfh $line;
-    $line_count = ($line_count + 1) % 4;
-    if ($line_count == 0) {
-      print $lfh "\n";
-    } else {
-      print $lfh "\t";
-    }
-  }
-  $ifh->close;
-  $lfh->close;
-
-  # Sort the file
-  system( "sort -V -t '\t' -k1,1 $linearized_file -o $linearized_sorted_file" );
-  unlink $linearized_file or die "$0: Can't delete $linearized_file: $!";
-
-  # Un-linearize the file by splitting lines into multiple lines, and save
-  $lfh = IO::File->new($linearized_sorted_file, "r") or die "$0: Can't open $linearized_sorted_file: $!";
-  my $ofh = IO::File->new($output_file, "w") or die "$0: Can't create $output_file: $!";
-  $line_count = 0;
-  while ( my $line = $lfh->getline ) {
-    chomp( $line );
-    my @fields = split( /\t/, $line );
-    print $ofh $fields[0] . "\n";
-    print $ofh $fields[1] . "\n";
-    print $ofh $fields[2] . "\n";
-    print $ofh $fields[3] . "\n";
-  }
-  $ofh->close;
-  $lfh->close;
-  unlink $linearized_sorted_file or die "$0: Can't delete $linearized_sorted_file: $!";
 }
 
 # Checks if the given folder exists, and removes trailing slash from string
