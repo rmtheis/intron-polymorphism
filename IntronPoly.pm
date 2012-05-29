@@ -302,14 +302,14 @@ sub bowtie2_identify {
 #   die "$0: cut exited unsuccessful";
 # }
 
-  my $ifh = new IO::File( "$work_dir/${data_basename}_alignment.sam", 'r' )
-    or die "Can't open $work_dir/${data_basename}_alignment.sam: $!";
-  my $ofh = IO::File->new( "$work_dir/${data_basename}_halfmapping1.sam", 'w' )
-    or die "Can't create $work_dir/${data_basename}_halfmapping1.sam: $!";
-  my $ofh2 = IO::File->new( "$work_dir/${data_basename}_halfmapping2.sam", 'w' )
-    or die "Can't create $work_dir/${data_basename}_halfmapping2.sam: $!";
-  my $ofh3 = IO::File->new( "$work_dir/${data_basename}_multmapping.sam", 'w' )
-    or die "Can't create $work_dir/${data_basename}_multmapping.sam: $!";
+  my $infile   = "$work_dir/${data_basename}_alignment.sam";
+  my $outfile  = "$work_dir/${data_basename}_halfmapping1.sam";
+  my $outfile2 = "$work_dir/${data_basename}_halfmapping2.sam";
+  my $outfile3 = "$work_dir/${data_basename}_multmapping.sam";
+  my $ifh  = IO::File->new( $infile, 'r' ) or die "Can't open $infile: $!";
+  my $ofh  = IO::File->new( $outfile, 'w' ) or die "Can't create $outfile: $!";
+  my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "Can't create $outfile2: $!";
+  my $ofh3 = IO::File->new( $outfile3, 'w' ) or die "Can't create $outfile3: $!";
   my $prev_id         = "";
   my $discard_this_id = 0;
   my $mapping         = 0;
@@ -433,67 +433,68 @@ sub filter {
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $bowtie2_dir         = $self->{"bowtie_db"}->{"bowtie2_dir"};
   my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
-  my $ifh = new IO::File( "$work_dir/${data_basename}_halfmapping1.sam", 'r' )
-    or die "$0: Can't open $work_dir/${data_basename}_halfmapping1.sam: $!";
-  my $ofh =
-    new IO::File( "$work_dir/${data_basename}_fake_paired_end_1.fq", 'w' )
-    or die "$0: Can't open $work_dir/${data_basename}_fake_paired_end_1.fq: $!";
-  my $ofh2 =
-    new IO::File( "$work_dir/${data_basename}_fake_paired_end_2.fq", 'w' )
-    or die "$0 Can't open $work_dir/${data_basename}_fake_paired_end_2.fq: $!";
-
+  
   # Define length of each mate for the fake read pairs
   my $mate_length = 16;
-
+  
   # Define length of read pair for fake paired-end alignment
   my $read_length = 500;    # TODO get this from infer_fraglen.pl
-
-  # Boolean to track whether we have any half-mapping pairs
-  my $have_candidates = 0;
-
-  # Get the mates we want and write them as fake paired-end reads to FastQ
-  while ( my $line = $ifh->getline ) {
-    if ( $line =~ m/^@/ ) {
-      next;
-    }
-    my @fields         = split( /\t/, $line );
-    my $id             = $fields[0];
-    my $flag_sum       = $fields[1];
-    my $sequence       = $fields[9];
-    my $quality_scores = $fields[10];
-
-    # Create a fake pair from the unaligned mate in the pair
-    if ( &_isUnalignedMate($flag_sum) ) {
-
-      # Set a flag indicating that we got at least one half-mapping pair
-      $have_candidates = 1;
-
-      # Reverse complement reads that aligned to the reverse strand, to get original read
-      if ( ( $flag_sum & 16 ) == 1 ) {
-        $sequence = &_reverseComplement($sequence);
+  
+  {
+    my $infile   = "$work_dir/${data_basename}_halfmapping1.sam";
+    my $outfile1 = "$work_dir/${data_basename}_fake_paired_end_1.fq";
+    my $outfile2 = "$work_dir/${data_basename}_fake_paired_end_2.fq";
+    my $ifh  = IO::File->new( $infile, 'r' ) or die "$0: Can't open $infile: $!";
+    my $ofh1 = IO::File->new( $outfile1, 'w' ) or die "$0: Can't open $outfile1: $!";
+    my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "$0: Can't open $outfile2: $!";
+  
+    # Boolean to track whether we have any half-mapping pairs
+    my $have_candidates = 0;
+  
+    # Get the mates we want and write them as fake paired-end reads to FastQ
+    while ( my $line = $ifh->getline ) {
+      if ( $line =~ m/^@/ ) {
+        next;
       }
-
-      # Create the fake mates. Mate 2 gets reverse complemented.
-      my $mate_1 = substr( $sequence, 0, $mate_length );
-      my $mate_2 =
-        &_reverseComplement( substr( $sequence, -1 * $mate_length ) );
-      my $quality_scores_1 = substr( $quality_scores, 0, $mate_length );
-      my $quality_scores_2 =
-        scalar reverse substr( $quality_scores, -1 * $mate_length );
-
-      # Write the fake mates
-      print $ofh "\@$id\/1\n$mate_1\n+\n$quality_scores_1\n";
-      print $ofh2 "\@$id\/2\n$mate_2\n+\n$quality_scores_2\n";
+      my @fields         = split( /\t/, $line );
+      my $id             = $fields[0];
+      my $flag_sum       = $fields[1];
+      my $sequence       = $fields[9];
+      my $quality_scores = $fields[10];
+  
+      # Create a fake pair from the unaligned mate in the pair
+      if ( &_isUnalignedMate($flag_sum) ) {
+  
+        # Set a flag indicating that we got at least one half-mapping pair
+        $have_candidates = 1;
+  
+        # Reverse complement reads that aligned to the reverse strand, to get original read
+        if ( ( $flag_sum & 16 ) == 1 ) {
+          $sequence = &_reverseComplement($sequence);
+        }
+  
+        # Create the fake mates. Mate 2 gets reverse complemented.
+        my $mate_1 = substr( $sequence, 0, $mate_length );
+        my $mate_2 =
+          &_reverseComplement( substr( $sequence, -1 * $mate_length ) );
+        my $quality_scores_1 = substr( $quality_scores, 0, $mate_length );
+        my $quality_scores_2 =
+          scalar reverse substr( $quality_scores, -1 * $mate_length );
+  
+        # Write the fake mates
+        print $ofh1 "\@$id\/1\n$mate_1\n+\n$quality_scores_1\n";
+        print $ofh2 "\@$id\/2\n$mate_2\n+\n$quality_scores_2\n";
+      }
     }
-  }
-  $ifh->close;
-  $ofh->close;
-  $ofh2->close;
-
-  # Define the maximum/minimum insert length as read length +/- 10
-  if ( !$have_candidates ) {
-    print STDERR "$0: filter(): No half-mapping pairs available.\n";
-    return 1;
+    $ifh->close;
+    $ofh1->close;
+    $ofh2->close;
+    
+    # Define the maximum/minimum insert length as read length +/- 10
+    if ( !$have_candidates ) {
+      print STDERR "$0: filter(): No half-mapping pairs available.\n";
+      return 1;
+    }
   }
 
   # Run Bowtie 2 with the fake read pairs as input
@@ -512,79 +513,76 @@ sub filter {
     die "$0: bowtie2 exited unsuccessful";
   }
 
-  # Find reads representing insertions/deletions by considering all the fake pairs that aligned
-  $ifh =
-    new IO::File( "$work_dir/${data_basename}_fake_pairs_alignment.sam", 'r' )
-    or die
-    "$0: Can't open $work_dir/${data_basename}_fake_pairs_alignment.sam: $!";
-  my $ifh2 = new IO::File( "$work_dir/${data_basename}_halfmapping1.sam", 'r' )
-    or die "$0: Can't open $work_dir/${data_basename}_halfmapping1.sam: $!";
-  $ofh = new IO::File( "$work_dir/${data_basename}_filtered.sam", 'w' )
-    or die "$0: Can't open $work_dir/${data_basename}_filtered.sam: $!";
-  $ofh2 =
-    new IO::File( "$work_dir/${data_basename}_fake_pairs_alignment.debug", 'w' )
-    or die
-    "$0: Can't open $work_dir/${data_basename}_fake_pairs_alignment.debug: $!"
-    if DEBUG;
-
-  # Get an alignment from the originally half-mapping pairs
-  while ( my $line = $ifh2->getline ) {
-    if ( $line =~ m/^@/ ) {
-      next;
-    }
-    my @fields         = split( /\t/, $line );
-    my $orig_id        = $fields[0];
-    my $orig_flag_sum  = $fields[1];
-    my $other_mate_pos = $fields[7];
-
-    # Consider only the unaligned mate from the half-mapping read pair
-    if ( !&_isUnalignedMate($orig_flag_sum) ) {
-      next;
-    }
-
-    # Get the corresponding alignment from the fake pairs
-    my $fake_line;
-    while ( $fake_line = $ifh->getline ) {
-      if ( $fake_line =~ m/^@/ ) {
+  {
+    # Find reads representing insertions/deletions by considering all the fake pairs that aligned
+    my $infile1  = "$work_dir/${data_basename}_fake_pairs_alignment.sam";
+    my $infile2  = "$work_dir/${data_basename}_halfmapping1.sam";
+    my $outfile1 = "$work_dir/${data_basename}_filtered.sam";
+    my $outfile2 = "$work_dir/${data_basename}_fake_pairs_alignment.debug" if DEBUG;
+    my $ifh1 = IO::File->new( $infile1, 'r' ) or die "$0: Can't open $infile1: $!";
+    my $ifh2 = IO::File->new( $infile2, 'r' ) or die "$0: Can't open $infile2: $!";
+    my $ofh1 = IO::File->new( $outfile1, 'w' ) or die "$0: Can't open $outfile1: $!";
+    my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "$0: Can't open $outfile2: $!" if DEBUG;
+  
+    # Get an alignment from the originally half-mapping pairs
+    while ( my $line = $ifh2->getline ) {
+      if ( $line =~ m/^@/ ) {
         next;
       }
-      my @fields = split( /\t/, $fake_line );
-      my $id     = $fields[0];
-      my $pos    = $fields[3];
-      while ( $id ne $orig_id ) {
-        $fake_line = $ifh->getline;
-        my @fields = split( /\t/, $fake_line );
-        $id  = $fields[0];
-        $pos = $fields[3];
+      my @fields         = split( /\t/, $line );
+      my $orig_id        = $fields[0];
+      my $orig_flag_sum  = $fields[1];
+      my $other_mate_pos = $fields[7];
+  
+      # Consider only the unaligned mate from the half-mapping read pair
+      if ( !&_isUnalignedMate($orig_flag_sum) ) {
+        next;
       }
-
-      print $ofh2 "\nFAKE PAIR ALIGNMENT LINE 1: $fake_line"         if DEBUG;
-      print $ofh2 "ORIGINAL HALF-MAPPING PAIR UNALIGNED MATE: $line" if DEBUG;
-      print $ofh2 "ORIG_POS: $other_mate_pos POS: $pos\n"            if DEBUG;
-
-      # Discard fake pairs that align close to the originally aligning mate in the half-mapping read pair
-      if (
-        $pos != 0
-        && ( $pos < ( $other_mate_pos + $read_length + 10 )
-          && $pos > ( $other_mate_pos + $read_length - 10 ) )
-        )
-      {
-        print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $read_length plus or minus ten\n"
+  
+      # Get the corresponding alignment from the fake pairs
+      my $fake_line;
+      while ( $fake_line = $ifh1->getline ) {
+        if ( $fake_line =~ m/^@/ ) {
+          next;
+        }
+        my @fields = split( /\t/, $fake_line );
+        my $id     = $fields[0];
+        my $pos    = $fields[3];
+        while ( $id ne $orig_id ) {
+          $fake_line = $ifh1->getline;
+          my @fields = split( /\t/, $fake_line );
+          $id  = $fields[0];
+          $pos = $fields[3];
+        }
+  
+        print $ofh2 "\nFAKE PAIR ALIGNMENT LINE 1: $fake_line"         if DEBUG;
+        print $ofh2 "ORIGINAL HALF-MAPPING PAIR UNALIGNED MATE: $line" if DEBUG;
+        print $ofh2 "ORIG_POS: $other_mate_pos POS: $pos\n"            if DEBUG;
+  
+        # Discard fake pairs that align close to the originally aligning mate in the half-mapping read pair
+        if (
+          $pos != 0
+          && ( $pos < ( $other_mate_pos + $read_length + 10 )
+            && $pos > ( $other_mate_pos + $read_length - 10 ) )
+          )
+        {
+          print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $read_length plus or minus ten\n"
+            if DEBUG;
+          last;
+        }
+        print $ofh2 "RETAINED: pos = $pos, other_mate_pos = $other_mate_pos\n"
           if DEBUG;
+  
+        # Keep this mate
+        print $ofh1 $line;
         last;
       }
-      print $ofh2 "RETAINED: pos = $pos, other_mate_pos = $other_mate_pos\n"
-        if DEBUG;
-
-      # Keep this mate
-      print $ofh $line;
-      last;
     }
+    $ifh1->close;
+    $ifh2->close;
+    $ofh1->close;
+    $ofh2->close if DEBUG;
   }
-  $ifh->close;
-  $ifh2->close;
-  $ofh->close;
-  $ofh2->close if DEBUG;
 }
 
 =head2 group
@@ -606,6 +604,11 @@ sub group {
   my $work_dir      = $self->{"work_dir"};
   my $data_basename = $self->{"data_basename"};
 
+  my $halfmap1_file = "$work_dir/${data_basename}_filtered.sam";
+  my $halfmap2_file = "$work_dir/${data_basename}_halfmapping2.sam";
+  my $halfmap_all_file = "$work_dir/${data_basename}_halfmapping_all.sam";
+  my $sorted_file = "$work_dir/${data_basename}_halfmapping_all_sorted.sam";
+  
   # Expected intron length
   my $intron_length = 250;
 
@@ -614,26 +617,21 @@ sub group {
 
   # Sort by alignment positionn
   my $results = capture(
-    "cat $work_dir/${data_basename}_filtered.sam " .
-
-      #"$work_dir/${data_basename}_halfmapping2.sam " .
-      "> $work_dir/${data_basename}_halfmapping_all.sam"
+    "cat $halfmap1_file " .
+      #"$halfmap2_file " .
+      "> $halfmap_all_file"
   );
   if ( $EXITVAL != 0 ) {
     die "$0: cat exited unsuccessful";
   }
   $results = capture(
-    "sort -k 8,8 -n -o $work_dir/${data_basename}_halfmapping_all_sorted.sam "
-      . "$work_dir/${data_basename}_halfmapping_all.sam" );
+    "sort -k 8,8 -n -o $sorted_file $halfmap_all_file" );
   if ( $EXITVAL != 0 ) {
     die "$0: sort exited unsuccessful";
   }
 
   # Get the clusters one at a time
-  my $ifh =
-    new IO::File( "$work_dir/${data_basename}_halfmapping_all_sorted.sam", 'r' )
-    or die
-    "$0: Can't open $work_dir/${data_basename}_halfmapping_all_sorted.sam: $!";
+  my $ifh = IO::File->new( $sorted_file, 'r' ) or die "$0: $sorted_file: $!";
   my @cluster;
   my $have_cluster = 0;
   my $last_pos     = 0;
@@ -679,28 +677,25 @@ sub group {
 
       # Open output file
       ++$count;
-      my $ofh = new IO::File(
-        "$work_dir/velvet-data/${data_basename}_cluster_$count.txt", 'w' )
-        or die
-        "$0: Can't open $work_dir/velvet-data/${data_basename}_cluster_$count.txt: $!";
+      my $outfile = "$work_dir/velvet-data/${data_basename}_cluster_$count.txt";
+      my $ofh = IO::File->new( $outfile, 'w' ) or die "$0: Can't open $outfile: $!";
 
       while ( scalar(@cluster) > 0 ) {
         print $ofh shift(@cluster);
       }
       $ofh->close();
+      my $outdir = "$work_dir/velvet-data/cluster_${count}/";
       $results =
-        capture( "velveth $work_dir/velvet-data/cluster_$count 13 -sam -short "
-          . "$work_dir/velvet-data/${data_basename}_cluster_$count.txt" );
+        capture( "velveth $outdir 13 -sam -short $outfile" );
       if ( $EXITVAL != 0 ) {
         die "$0: velveth exited unsuccessful";
       }
 
-# Delete the SAM file of read data unless we're debugging
-#unlink( "$work_dir/velvet-data/${data_basename}_cluster_$count.txt" ) if !DEBUG
-#        or die "$0: cannot delete $work_dir/velvet-data/${data_basename}_cluster_$count.txt";
+      # Delete the SAM file of read data unless we're debugging
+      #unlink( $outfile ) if !DEBUG or die "$0: cannot delete $outfile: $!";
 
       # Run velvetg on groups
-      $results = capture("velvetg $work_dir/velvet-data/cluster_${count}/");
+      $results = capture("velvetg $outdir");
       if ( $EXITVAL != 0 ) {
         die "$0: velvetg exited unsuccessful";
       }
@@ -710,6 +705,7 @@ sub group {
     }
 
   }
+  $ifh->close();
 
 }
 
