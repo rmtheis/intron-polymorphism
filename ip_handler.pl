@@ -115,7 +115,6 @@ print "Running MAPPING...\n";
 
 # Set mapping-related parameters
 $project->mapping_setup(
-  $bowtie1_dir,
   $bowtie2_dir,
   $bowtie_index_dir,
   $reads_dir,
@@ -124,11 +123,9 @@ $project->mapping_setup(
 $mapping_setup_completed = 1;
 
 # Build the index required for Bowtie to run
-#$project->build_bowtie1_index();
 $project->build_bowtie2_index();
 
 # Map the reads to the reference genome to identify unaligning pairs
-#$project->run_bowtie1_mapping( $bowtie_num_threads );
 $project->run_bowtie2_mapping( $bowtie_num_threads, $minins, $maxins );
 
 COLLECTION:
@@ -137,7 +134,6 @@ print "Running COLLECTION...\n";
 # Ensure mapping-related parameters are set, in case we skipped to this step
 if ($mapping_setup_completed != 1) {
   $project->mapping_setup(
-    $bowtie1_dir,
     $bowtie2_dir,
     $bowtie_index_dir,
     $reads_dir,
