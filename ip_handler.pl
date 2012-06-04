@@ -58,6 +58,12 @@ my $minins = 100;
 # Default -X/--maxins <int> value for Bowtie
 my $maxins = 3000;
 
+# Default expected intron length for assembly
+my $intron_length = 250;
+
+# Default minimum number of nearby half-mapping mates needed to perform local assembly on group
+my $min_mates = 2;
+
 ###########################
 # INITIALIZE THE PIPELINE #
 ###########################
@@ -75,6 +81,7 @@ GetOptions(
   'b:s' => \$data_basename,
   'g:s' => \$ref_genome_filename,
   'k:s' => \$skip_to,
+  'l:i' => \$intron_length,
   'max:i' => \$maxins,
   'min:i' => \$minins,
   'rd:s' => \$reads_dir,
@@ -151,7 +158,7 @@ $project->filter( $bowtie_num_threads );
 
 ASSEMBLY:
 print "Running ASSEMBLY...\n";
-$project->assemble_groups();
+$project->assemble_groups( $intron_length, $min_mates );
 
 #ALIGNMENT:
 

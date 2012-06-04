@@ -577,22 +577,26 @@ sub filter {
   }
 }
 
-=head2 group
+=head2 assemble_groups
 
- Title   : group
- Usage   : $project->group()
- Function: Gathers groups of half-mapping read pairs that align to the reference genome at locations
-           near one another, and performs a local assembly on the unaligned mates in each group
+ Title   : assemble_groups
+ Usage   : $project->assemble_groups()
+ Function: Identifies groups of half-mapping read pairs that align to the reference genome at
+           locations near one another, and performs a local assembly on the unaligned mates in each
+           group
  Example : $project->bowtie2_identify();
            $project->filter( 8 );
-           $project->group();
+           $project->assemble_groups( 250, 3 );
  Returns : No return value
- Args    : No arguments
+ Args    : Expected intron length for group identification, Minimum number of unaligned mates
+           from half-mapping read pairs needed near one another to consider them to be a group
 
 =cut
 
 sub assemble_groups {
   my $self          = shift;
+  my $intron_length = shift;
+  my $min_aln       = shift;
   my $work_dir      = $self->{"work_dir"};
   my $data_basename = $self->{"data_basename"};
 
@@ -600,9 +604,6 @@ sub assemble_groups {
   my $halfmap2_file = "$work_dir/${data_basename}_halfmapping2.sam";
   my $halfmap_all_file = "$work_dir/${data_basename}_halfmapping_all.sam";
   my $sorted_file = "$work_dir/${data_basename}_halfmapping_all_sorted.sam";
-  
-  # Expected intron length
-  my $intron_length = 250;
 
   # Insert length
   my $ins = 100;
@@ -661,7 +662,7 @@ sub assemble_groups {
     }
 
     # Run velveth on groups of 2 or more reads using stdout
-    if ( scalar(@groups) >= 2 ) {
+    if ( scalar(@groups) >= $min_aln ) {
 
       # Open output file
       ++$count;
