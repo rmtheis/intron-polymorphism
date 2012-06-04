@@ -44,8 +44,7 @@ my $reads_dir = "/home/theis/intron-polymorphism/testdata";
 my $data_basename = "E100000";
 
 # Directory name where the bowtie executables are located
-my $bowtie1_dir = "/home/theis/intron-polymorphism/bowtie-0.12.7";
-my $bowtie2_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta5";
+my $bowtie2_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta6";
 
 # Directory name where existing bowtie index files may be located
 my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
@@ -76,9 +75,11 @@ GetOptions(
   'b:s' => \$data_basename,
   'g:s' => \$ref_genome_filename,
   'k:s' => \$skip_to,
+  'max:i' => \$maxins,
+  'min:i' => \$minins,
   'rd:s' => \$reads_dir,
   't:s' => \$bowtie_num_threads,
-);
+) || die "$0: Bad option";
 
 # Initialize the project
 my $project = IntronPoly->new();
@@ -150,7 +151,7 @@ $project->filter( $bowtie_num_threads );
 
 ASSEMBLY:
 print "Running ASSEMBLY...\n";
-$project->group();
+$project->assemble_groups();
 
 #ALIGNMENT:
 

@@ -313,7 +313,7 @@ sub bowtie2_identify {
   my $prev_id         = "";
   my $discard_this_id = 0;
   my $mapping         = 0;
-  my @print_lines;
+  my @print_lines = ();
 
   while ( my $line = $ifh->getline ) {
 
@@ -321,9 +321,8 @@ sub bowtie2_identify {
     if ( $line =~ m/^@/ ) {
       next;
     }
-    my @fields   = split( /\t/, $line );
-    my $mate_id  = $fields[0];
-    my $flag_sum = $fields[1];
+    my @fields = split( /\t/, $line );
+    my ($mate_id, $flag_sum) = ($fields[0], $fields[1]);
 
     # Check if this mate ID is different from the last line
     if ( $mate_id ne $prev_id ) {
@@ -456,11 +455,8 @@ sub filter {
       if ( $line =~ m/^@/ ) {
         next;
       }
-      my @fields         = split( /\t/, $line );
-      my $id             = $fields[0];
-      my $flag_sum       = $fields[1];
-      my $sequence       = $fields[9];
-      my $quality_scores = $fields[10];
+      my @fields = split( /\t/, $line );
+      my ($id, $flag_sum, $sequence, $quality_scores) = ($fields[0], $fields[1], $fields[9], $fields[10]);
   
       # Create a fake pair from the unaligned mate in the pair
       if ( &_isUnalignedMate($flag_sum) ) {
@@ -529,11 +525,9 @@ sub filter {
       if ( $line =~ m/^@/ ) {
         next;
       }
-      my @fields         = split( /\t/, $line );
-      my $orig_id        = $fields[0];
-      my $orig_flag_sum  = $fields[1];
-      my $other_mate_pos = $fields[7];
-  
+      my @fields = split( /\t/, $line );
+      my ($orig_id, $orig_flag_sum, $other_mate_pos) = ($fields[0], $fields[1], $fields[7]);
+ 
       # Consider only the unaligned mate from the half-mapping read pair
       if ( !&_isUnalignedMate($orig_flag_sum) ) {
         next;
@@ -546,13 +540,11 @@ sub filter {
           next;
         }
         my @fields = split( /\t/, $fake_line );
-        my $id     = $fields[0];
-        my $pos    = $fields[3];
+        my ($id, $pos) = ($fields[0], $fields[3]);
         while ( $id ne $orig_id ) {
           $fake_line = $ifh1->getline;
           my @fields = split( /\t/, $fake_line );
-          $id  = $fields[0];
-          $pos = $fields[3];
+          ($id, $pos) = ($fields[0], $fields[3]);
         }
   
         print $ofh2 "\nFAKE PAIR ALIGNMENT LINE 1: $fake_line"         if DEBUG;
@@ -566,7 +558,7 @@ sub filter {
             && $pos > ( $other_mate_pos + $read_length - 10 ) )
           )
         {
-          print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $read_length plus or minus ten\n"
+          print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $read_length +/- 10\n"
             if DEBUG;
           last;
         }
@@ -599,7 +591,7 @@ sub filter {
 
 =cut
 
-sub group {
+sub assemble_groups {
   my $self          = shift;
   my $work_dir      = $self->{"work_dir"};
   my $data_basename = $self->{"data_basename"};
@@ -632,8 +624,7 @@ sub group {
 
   # Get the clusters one at a time
   my $ifh = IO::File->new( $sorted_file, 'r' ) or die "$0: $sorted_file: $!";
-  my @cluster;
-  my $have_cluster = 0;
+  my @groups = ();
   my $last_pos     = 0;
   my $overlap_dist = 2 * $ins + $intron_length;
 
@@ -647,15 +638,12 @@ sub group {
       next;
     }
     my @fields = split( /\t/, $line );
-    $id   = $fields[0];
-    $flag = $fields[1];
-    $pos  = $fields[7];
-    $seq  = $fields[9];
+    my ($id, $flag, $pos, $seq) = ($fields[0], $fields[1], $fields[7], $fields[9]);
 
     # Add or discard based on position, treating upstream mates differently from downstream mates
     if ( ( $flag & 20 ) == 0 ) {
       if ( ( $pos - $last_pos ) < $overlap_dist ) {
-        push( @cluster, $line );
+        push( @groups, $line );
         print "before: last_pos=$last_pos, pos=$pos\n";
         $last_pos = $pos;
         print "after: last_pos=$last_pos, pos=$pos\n";
@@ -665,7 +653,7 @@ sub group {
     }
     else {
       if ( ( $pos - $last_pos ) < ( $ins - length($seq) + $intron_length ) ) {
-        push( @cluster, $line );
+        push( @groups, $line );
         $last_pos = $pos;
         next;
       }
@@ -673,18 +661,18 @@ sub group {
     }
 
     # Run velveth on groups of 2 or more reads using stdout
-    if ( scalar(@cluster) >= 2 ) {
+    if ( scalar(@groups) >= 2 ) {
 
       # Open output file
       ++$count;
-      my $outfile = "$work_dir/velvet-data/${data_basename}_cluster_$count.txt";
+      my $outfile = "$work_dir/velvet-data/${data_basename}_group_$count.txt";
       my $ofh = IO::File->new( $outfile, 'w' ) or die "$0: Can't open $outfile: $!";
 
-      while ( scalar(@cluster) > 0 ) {
-        print $ofh shift(@cluster);
+      while ( scalar(@groups) > 0 ) {
+        print $ofh shift(@groups);
       }
       $ofh->close();
-      my $outdir = "$work_dir/velvet-data/cluster_${count}/";
+      my $outdir = "$work_dir/velvet-data/group_${count}/";
       $results =
         capture( "velveth $outdir 13 -sam -short $outfile" );
       if ( $EXITVAL != 0 ) {
@@ -701,7 +689,7 @@ sub group {
       }
     }
     else {
-      @cluster = ();
+      @groups = ();
     }
 
   }
