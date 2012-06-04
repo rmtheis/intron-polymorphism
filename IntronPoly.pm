@@ -316,11 +316,7 @@ sub bowtie2_identify {
   my @print_lines = ();
 
   while ( my $line = $ifh->getline ) {
-
-    # Ensure we're reading an alignment line and not a header line
-    if ( $line =~ m/^@/ ) {
-      next;
-    }
+    next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
     my ($mate_id, $flag_sum) = ($fields[0], $fields[1]);
 
@@ -360,9 +356,8 @@ sub bowtie2_identify {
     else {
 
       # This line is the second or greater line with this read ID
-      if ($discard_this_id) {
-        next;
-      }
+      next if $discard_this_id;
+
       if ( scalar @print_lines == 2 && $mapping == 0 ) {
 
         # Found a secondary alignment preceded by two half-mapping mates. Discard all lines with this ID.
@@ -452,9 +447,7 @@ sub filter {
   
     # Get the mates we want and write them as fake paired-end reads to FastQ
     while ( my $line = $ifh->getline ) {
-      if ( $line =~ m/^@/ ) {
-        next;
-      }
+      next if $line =~ m/^@/;
       my @fields = split( /\t/, $line );
       my ($id, $flag_sum, $sequence, $quality_scores) = ($fields[0], $fields[1], $fields[9], $fields[10]);
   
@@ -522,23 +515,17 @@ sub filter {
   
     # Get an alignment from the originally half-mapping pairs
     while ( my $line = $ifh2->getline ) {
-      if ( $line =~ m/^@/ ) {
-        next;
-      }
+      next if $line =~ m/^@/;
       my @fields = split( /\t/, $line );
       my ($orig_id, $orig_flag_sum, $other_mate_pos) = ($fields[0], $fields[1], $fields[7]);
  
       # Consider only the unaligned mate from the half-mapping read pair
-      if ( !&_isUnalignedMate($orig_flag_sum) ) {
-        next;
-      }
+      next if !&_isUnalignedMate($orig_flag_sum);
   
       # Get the corresponding alignment from the fake pairs
       my $fake_line;
       while ( $fake_line = $ifh1->getline ) {
-        if ( $fake_line =~ m/^@/ ) {
-          next;
-        }
+        next if $fake_line =~ m/^@/;
         my @fields = split( /\t/, $fake_line );
         my ($id, $pos) = ($fields[0], $fields[3]);
         while ( $id ne $orig_id ) {
@@ -635,9 +622,7 @@ sub assemble_groups {
   my $seq;
   my $count = 0;
   while ( my $line = $ifh->getline ) {
-    if ( $line =~ m/^@/ ) {
-      next;
-    }
+    next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
     my ($id, $flag, $pos, $seq) = ($fields[0], $fields[1], $fields[7], $fields[9]);
 
