@@ -52,12 +52,12 @@ sub dieusage {
 #
 sub checkIndex($) {
 	my $idx = shift;
-	return -f "$idx.1.ebwt" &&
-	       -f "$idx.2.ebwt" &&
-	       -f "$idx.3.ebwt" &&
-	       -f "$idx.4.ebwt" &&
-	       -f "$idx.rev.1.ebwt" &&
-	       -f "$idx.rev.2.ebwt";
+	return -f "$idx.1.bt2" &&
+	       -f "$idx.2.bt2" &&
+	       -f "$idx.3.bt2" &&
+	       -f "$idx.4.bt2" &&
+	       -f "$idx.rev.1.bt2" &&
+	       -f "$idx.rev.2.bt2";
 }
 
 GetOptions (
@@ -81,8 +81,8 @@ die "Bad index: $index" if !checkIndex($index);
 my %fragments = ();
 my $m1cmd = ($m1 =~ /\.gz$/) ? "gzip -dc $m1" : "cat $m1";
 my $m2cmd = ($m2 =~ /\.gz$/) ? "gzip -dc $m2" : "cat $m2";
-my $cmd1 = "$m1cmd | $bowtie2 $bowtie_args -m 1 -S --sam-nohead $index - > .infer_fraglen.tmp";
-my $cmd2 = "$m2cmd | $bowtie2 $bowtie_args -m 1 -S --sam-nohead $index - |";
+my $cmd1 = "$m1cmd | $bowtie2 $bowtie_args -M 1 --no-hd $index - > .infer_fraglen.tmp";
+my $cmd2 = "$m2cmd | $bowtie2 $bowtie_args -M 1 --no-hd $index - |";
 system($cmd1) == 0 || die "Error running '$cmd1'";
 open (M1, ".infer_fraglen.tmp") || die "Could not open '.infer_fraglen.tmp'";
 open (M2, $cmd2) || die "Could not open '$cmd2'";
