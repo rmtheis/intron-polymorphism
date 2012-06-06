@@ -311,7 +311,7 @@ sub bowtie_identify {
         my $line2  = shift(@print_lines);
         my @fd2    = split( /\t/, $line2 );
         my $flags2 = $fd2[1];
-        if ( &_isLongMapping( $flags1, $flags2 ) ) {
+        if ( &_isLongMappingPair( $flags1, $flags2 ) ) {
           print $ofh2 "$line1$line2";
         }
         else {
@@ -353,19 +353,19 @@ sub bowtie_identify {
     }
 
     # At this point we have an alignment we may want to keep, so look at the sum-of-flags value to classify.
-    if ( &_isMapping($flags) ) {
+    if ( &_isInMappingPair($flags) ) {
 
       # Save this full-mapping line for printing
       $mapping = 2;
       push( @print_lines, $line );
     }
-    elsif ( &_isNonMapping($flags) ) {
+    elsif ( &_isInNonMappingPair($flags) ) {
 
       # We have a non-mapping ID. Discard all lines with this ID.
       $mapping         = 0;
       $discard_this_id = 1;
     }
-    elsif ( &_isHalfMapping($flags) ) {
+    elsif ( &_isHalfMappingMate($flags) ) {
 
       # Save this half-mapping line for printing
       $mapping = 1;
@@ -433,7 +433,7 @@ sub filter {
       my ($id, $flags, $sequence, $quality_scores) = ($fields[0], $fields[1], $fields[9], $fields[10]);
   
       # Create a fake pair from the unaligned mate in the pair
-      if ( &_isUnaligned($flags) ) {
+      if ( &_isUnalignedMate($flags) ) {
   
         # Set a flag indicating that we got at least one half-mapping pair
         $have_candidates = 1;
@@ -499,7 +499,7 @@ sub filter {
       my ($orig_id, $orig_flags, $other_mate_pos) = ($fields[0], $fields[1], $fields[7]);
  
       # Consider only the unaligned mate from the half-mapping read pair
-      next if !&_isUnaligned($orig_flags);
+      next if !&_isUnalignedMate($orig_flags);
   
       # Get the corresponding alignment from the fake pairs
       my $fake_line;
@@ -702,37 +702,40 @@ sub _complement {
 }
 
 # Returns 1 if the given sum-of-flags value identifies a mate in a half-mapping read pair, otherwise returns 0
-sub _isHalfMapping {
+# The mate may be either the aligning mate or the non-aligning mate in the half-mapping read pair.
+# Note: Also returns 1 for "long-mapping" alignments, in which both mates align independently but do not meet
+# fragment length constraints defined by Bowtie's "--minins" and "--maxins" options
+sub _isHalfMappingMate {
   my $flags = shift;
   return ( (($flags & 4) != 0) ^ (($flags & 8) != 0) );
 }
 
-# Returns 1 if the given sum-of-flags value identifies an aligning mate, otherwise returns 0
-# Note: Also returns 1 for discordant alignments, which should be suppressed using "--no-discordant"
-sub _isMapping {
+# Returns 1 if the given sum-of-flags value identifies a mate in an aligning read pair, otherwise returns 0
+# Note: Also returns 1 for discordant alignments, which should be suppressed using Bowtie's "--no-discordant" option
+sub _isInMappingPair {
   my $flags = shift;
   return ( (($flags & 4) == 0) && (($flags & 8) == 0) );
 }
 
-# Returns 1 if the given sum-of-flags value identifies a mate in a no-alignments pair, otherwise returns 0
-sub _isNonMapping {
+# Returns 1 if the given sum-of-flags value identifies a mate in a no-alignments read pair, otherwise returns 0
+sub _isInNonMappingPair {
   my $flags = shift;
   return ( (($flags & 4) != 0) && (($flags & 8) != 0) );
 }
 
-# Returns 1 if the given sum-of-flags values represent a pair containing mates that align independently but do not meet
-# fragment length constraints, otherwise returns 0
-sub _isLongMapping {
+# Returns 1 if the given sum-of-flags values represent a read pair containing mates that align independently but
+# do not meet fragment length constraints, otherwise returns 0
+sub _isLongMappingPair {
   my $flags1 = shift;
   my $flags2 = shift;
-  return ( ((&_isNonMapping($flags1)) && (&_isHalfMapping($flags2)))
-        || ((&_isHalfMapping($flags1)) && (&_isNonMapping($flags2))) );
+  return ( ((($flags1 & 4) == 0) && (($flags1 & 8) != 0))
+        && ((($flags2 & 4) == 0) && (($flags2 & 8) != 0)) );
 }
 
-# Returns 1 if the given sum-of-flags value identifies an unaligned mate in a half-mapping pair, otherwise returns 0
-sub _isUnaligned {
+# Returns 1 if the given sum-of-flags value identifies a non-aligning mate, otherwise returns 0
+sub _isUnalignedMate {
   my $flags = shift;
-  return ( (($flags & 4) != 0) && (($flags & 8) == 0) );
+  return ( (($flags & 4) != 0) )
 }
 
 # Ensures that the given folder exists, and removes trailing slash from string
