@@ -140,33 +140,23 @@ sub mapping_setup {
   my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $ref_genome_dir      = $self->{"ref_genome"}->{"dir"};
-  unless ( -d $ref_genome_dir ) {
-    die "$0: reference genome directory $ref_genome_dir does not exist";
-  }
+  die "$0: reference genome directory $ref_genome_dir does not exist" unless ( -d $ref_genome_dir );
 
   # Perform basic validation on reference genome
   my $results = capture("$scripts_dir/validate_fasta.pl -i $ref_genome");
-  if ( $EXITVAL != 0 ) {
-    die "$0: validate_fasta.pl exited unsuccessful";
-  }
+  die "$0: validate_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Ensure that read pairs files exist
   $reads_dir = $1 if ( $reads_dir =~ /(.*)\/$/ );
   my $reads_file_one = "$reads_dir/${data_basename}_1.fq";
   my $reads_file_two = "$reads_dir/${data_basename}_2.fq";
-  unless ( -e $reads_file_one ) {
-    die "$0: reads file $reads_file_one does not exist";
-  }
-  unless ( -e $reads_file_two ) {
-    die "$0: reads file $reads_file_two does not exist";
-  }
+  die "$0: reads file $reads_file_one does not exist" unless ( -e $reads_file_one );
+  die "$0: reads file $reads_file_two does not exist" unless ( -e $reads_file_two );
 
   # Perform basic validation on read pairs files
   $results =
     capture("$scripts_dir/validate_fastq.pl -i $reads_dir/$data_basename");
-  if ( $EXITVAL != 0 ) {
-    die "$0: validate_fastq.pl exited unsuccessful";
-  }
+  die "$0: validate_fastq.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Create directory for Bowtie index files if necessary
   $bowtie_index_dir = $1 if ( $bowtie_index_dir =~ /(.*)\/$/ );
@@ -216,9 +206,7 @@ sub build_bowtie_index {
     print "Creating bowtie index in $bowtie_index_dir...\n";
     my $results = capture( "$bowtie_dir/bowtie2-build "
         . "$ref_genome $bowtie_index_dir/$ref_genome_basename" );
-    if ( $EXITVAL != 0 ) {
-      die "$0: bowtie2-build exited unsuccessful";
-    }
+    die "$0: bowtie2-build exited unsuccessful" if ( $EXITVAL != 0 );
   }
   else {
     print "Bowtie index already exists, not re-creating.\n";
@@ -262,17 +250,9 @@ sub run_bowtie_mapping {
       . "--no-discordant "
       . "--no-contain --no-overlap "
       . "-k 3 -1 $reads_file_one -2 $reads_file_two "
-      .
-
-      #"--al-conc $work_dir/${data_basename}_al-conc.%.fq " .
-      #"--un-conc $work_dir/${data_basename}_un-conc.%.fq " .
-      "-S $work_dir/${data_basename}_alignment.sam"
+      . "-S $work_dir/${data_basename}_alignment.sam"
   );
-
-  if ( $EXITVAL != 0 ) {
-    die "$0: Bowtie exited unsuccessful";
-  }
-
+  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
 }
 
 =head2 bowtie_identify
@@ -298,9 +278,7 @@ sub bowtie_identify {
 # # Remove all rows we're not interested in now
 # my $results = capture( "cut -f 1,2,4,10,11 $work_dir/${data_basename}_alignment.sam " .
 #        "> $work_dir/${data_basename}_alignment_pruned" );
-# if( $EXITVAL != 0 ) {
-#   die "$0: cut exited unsuccessful";
-# }
+# die "$0: cut exited unsuccessful" if( $EXITVAL != 0 );
 
   my $infile   = "$work_dir/${data_basename}_alignment.sam";
   my $outfile  = "$work_dir/${data_basename}_halfmapping1.sam";
@@ -333,7 +311,7 @@ sub bowtie_identify {
         my $line2  = shift(@print_lines);
         my @fd2    = split( /\t/, $line2 );
         my $flags2 = $fd2[1];
-        if ( &_isDiscordant( $flags1, $flags2 ) ) {
+        if ( &_isLongMapping( $flags1, $flags2 ) ) {
           print $ofh2 "$line1$line2";
         }
         else {
@@ -452,7 +430,7 @@ sub filter {
       my ($id, $flags, $sequence, $quality_scores) = ($fields[0], $fields[1], $fields[9], $fields[10]);
   
       # Create a fake pair from the unaligned mate in the pair
-      if ( &_isUnalignedMate($flags) ) {
+      if ( &_isUnaligned($flags) ) {
   
         # Set a flag indicating that we got at least one half-mapping pair
         $have_candidates = 1;
@@ -498,9 +476,7 @@ sub filter {
       #"--al-conc $work_dir/${data_basename}_fake_pairs_al-conc.%.fq " .
       "-S $work_dir/${data_basename}_fake_pairs_alignment.sam"
   );
-  if ( $EXITVAL != 0 ) {
-    die "$0: Bowtie exited unsuccessful";
-  }
+  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
 
   {
     # Find reads representing insertions/deletions by considering all the fake pairs that aligned
@@ -520,7 +496,7 @@ sub filter {
       my ($orig_id, $orig_flags, $other_mate_pos) = ($fields[0], $fields[1], $fields[7]);
  
       # Consider only the unaligned mate from the half-mapping read pair
-      next if !&_isUnalignedMate($orig_flags);
+      next if !&_isUnaligned($orig_flags);
   
       # Get the corresponding alignment from the fake pairs
       my $fake_line;
@@ -601,25 +577,17 @@ sub assemble_groups {
       #"$halfmap2_file " .
       "> $halfmap_all_file"
   );
-  if ( $EXITVAL != 0 ) {
-    die "$0: cat exited unsuccessful";
-  }
+  die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
+
   $results = capture(
     "sort -k 8,8 -n -o $sorted_file $halfmap_all_file" );
-  if ( $EXITVAL != 0 ) {
-    die "$0: sort exited unsuccessful";
-  }
+  die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Get the clusters one at a time
   my $ifh = IO::File->new( $sorted_file, 'r' ) or die "$0: $sorted_file: $!";
   my @groups = ();
-  my $last_pos     = 0;
+  my $last_pos = 0;
   my $overlap_dist = 2 * $ins + $intron_length;
-
-  my $id;
-  my $flags;
-  my $pos;
-  my $seq;
   my $count = 0;
   while ( my $line = $ifh->getline ) {
     next if $line =~ m/^@/;
@@ -659,20 +627,15 @@ sub assemble_groups {
       }
       $ofh->close();
       my $outdir = "$work_dir/velvet-data/group_${count}/";
-      $results =
-        capture( "velveth $outdir 13 -sam -short $outfile" );
-      if ( $EXITVAL != 0 ) {
-        die "$0: velveth exited unsuccessful";
-      }
+      $results = capture( "velveth $outdir 13 -sam -short $outfile" );
+      die "$0: velveth exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Delete the SAM file of read data unless we're debugging
       #unlink( $outfile ) if !DEBUG or die "$0: cannot delete $outfile: $!";
 
       # Run velvetg on groups
       $results = capture("velvetg $outdir");
-      if ( $EXITVAL != 0 ) {
-        die "$0: velvetg exited unsuccessful";
-      }
+      die "$0: velvetg exited unsuccessful" if ( $EXITVAL != 0 );
     }
     else {
       @groups = ();
@@ -756,7 +719,7 @@ sub _isNonMapping {
 
 # Returns 1 if the given sum-of-flags values represent a pair containing mates that align independently but do not meet
 # fragment length constraints, otherwise returns 0
-sub _isDiscordant {
+sub _isLongMapping {
   my $flags1 = shift;
   my $flags2 = shift;
   return ( ((&_isNonMapping($flags1)) && (&_isHalfMapping($flags2)))
@@ -764,27 +727,25 @@ sub _isDiscordant {
 }
 
 # Returns 1 if the given sum-of-flags value identifies an unaligned mate in a half-mapping pair, otherwise returns 0
-sub _isUnalignedMate {
+sub _isUnaligned {
   my $flags = shift;
   return ( (($flags & 4) != 0) && (($flags & 8) == 0) );
 }
 
-# Checks if the given folder exists, and removes trailing slash from string
+# Ensures that the given folder exists, and removes trailing slash from string
 sub _check_dir {
   my $dir = shift;
   if ( -d $dir ) {
     $dir = $1 if ( $dir =~ /(.*)\/$/ );
     return $dir;
   }
-  else {
-    die("$0: directory $dir does not exist");
-  }
+  die "$0: directory $dir does not exist";
 }
 
 # Creates the given directory, and gives an error message on failure
 sub _make_dir {
   my ($dirname) = @_;
-  mkdir $dirname, 0755 || die "$0: could not create $dirname";
+  mkdir $dirname, 0755 or die "$0: could not create $dirname";
 }
 
 # Returns a date/time string with no whitespace
