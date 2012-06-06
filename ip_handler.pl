@@ -44,7 +44,7 @@ my $reads_dir = "/home/theis/intron-polymorphism/testdata";
 my $data_basename = "E100000";
 
 # Directory name where the bowtie executables are located
-my $bowtie2_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta6";
+my $bowtie_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta6";
 
 # Directory name where existing bowtie index files may be located
 my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
@@ -123,7 +123,7 @@ print "Running MAPPING...\n";
 
 # Set mapping-related parameters
 $project->mapping_setup(
-  $bowtie2_dir,
+  $bowtie_dir,
   $bowtie_index_dir,
   $reads_dir,
   $data_basename,
@@ -131,10 +131,10 @@ $project->mapping_setup(
 $mapping_setup_completed = 1;
 
 # Build the index required for Bowtie to run
-$project->build_bowtie2_index();
+$project->build_bowtie_index();
 
 # Map the reads to the reference genome to identify unaligning pairs
-$project->run_bowtie2_mapping( $bowtie_num_threads, $minins, $maxins );
+$project->run_bowtie_mapping( $bowtie_num_threads, $minins, $maxins );
 
 COLLECTION:
 print "Running COLLECTION...\n";
@@ -142,7 +142,7 @@ print "Running COLLECTION...\n";
 # Ensure mapping-related parameters are set, in case we skipped to this step
 if ($mapping_setup_completed != 1) {
   $project->mapping_setup(
-    $bowtie2_dir,
+    $bowtie_dir,
     $bowtie_index_dir,
     $reads_dir,
     $data_basename,
@@ -150,7 +150,7 @@ if ($mapping_setup_completed != 1) {
 }
 
 # Identify all the half-mapping read pairs
-$project->bowtie2_identify();
+$project->bowtie_identify();
 
 FILTERING:
 print "Running FILTERING...\n";

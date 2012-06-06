@@ -115,14 +115,14 @@ sub build_db {
 =head2 mapping_setup
 
  Title   : mapping_setup
- Usage   : $project->mapping_setup( "bowtie2dir", "bowtie_index_dir", "reads_dir", "read_pairs_base_name")
+ Usage   : $project->mapping_setup( "bowtie_dir", "bowtie_index_dir", "reads_dir", "read_pairs_base_name")
  Function: Sets references to data files used for mapping reads to the reference genome
  Example : my $bowtie_dir = "/home/theis/bowtie2-2.0.0-beta6/";
            my $index_dir = "/home/theis/bt2/";
            my $reads_dir = "/home/theis/reads/";
            $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
  Returns : No return value
- Args    : Scalar full path to the Bowtie 2 executable directory, scalar full path to the Bowtie 2
+ Args    : Scalar full path to the Bowtie executable directory, scalar full path to the Bowtie
            index directory, scalar full path to the directory containing the Fastq read pairs files,
            and a scalar of the base name of the read pairs files (filename without "_1.fq" or
            "_2.fq" ending)
@@ -131,7 +131,7 @@ sub build_db {
 
 sub mapping_setup {
   my $self                = shift;
-  my $bowtie2_dir         = shift;
+  my $bowtie_dir          = shift;
   my $bowtie_index_dir    = shift;
   my $reads_dir           = shift;
   my $data_basename       = shift;
@@ -168,15 +168,15 @@ sub mapping_setup {
     die "$0: validate_fastq.pl exited unsuccessful";
   }
 
-  # Create directory for bowtie index files if necessary
+  # Create directory for Bowtie index files if necessary
   $bowtie_index_dir = $1 if ( $bowtie_index_dir =~ /(.*)\/$/ );
   unless ( -d $bowtie_index_dir ) {
     &_make_dir($bowtie_index_dir);
   }
 
-  # Remember paths needed for running bowtie
+  # Remember paths needed for running Bowtie
   $self->{"bowtie_db"} = {
-    bowtie2_dir      => $bowtie2_dir,
+    bowtie_dir       => $bowtie_dir,
     bowtie_index_dir => $bowtie_index_dir,
     reads_file_one   => $reads_file_one,
     reads_file_two   => $reads_file_two
@@ -186,23 +186,23 @@ sub mapping_setup {
   print "Using reads file 2: $reads_file_two\n";
 }
 
-=head2 build_bowtie2_index
+=head2 build_bowtie_index
 
- Title   : build_bowtie2_index
- Usage   : $project->build_bowtie2_index();
+ Title   : build_bowtie_index
+ Usage   : $project->build_bowtie_index();
  Function: Runs the bowtie2-build indexer to create a Bowtie index from the reference genome
  Example : $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
-           $project->build_bowtie2_index();
+           $project->build_bowtie_index();
  Returns : No return value
  Args    : No arguments
 
 =cut
 
-sub build_bowtie2_index {
+sub build_bowtie_index {
   my $self                = shift;
   my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie2_dir         = $self->{"bowtie_db"}->{"bowtie2_dir"};
+  my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
   my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   unless ( -e "$bowtie_index_dir/$ref_genome_basename.1.bt2"
     && "$bowtie_index_dir/$ref_genome_basename.2.bt2"
@@ -214,49 +214,49 @@ sub build_bowtie2_index {
 
     # Call bowtie-build to create the bowtie index
     print "Creating bowtie index in $bowtie_index_dir...\n";
-    my $results = capture( "$bowtie2_dir/bowtie2-build "
+    my $results = capture( "$bowtie_dir/bowtie2-build "
         . "$ref_genome $bowtie_index_dir/$ref_genome_basename" );
     if ( $EXITVAL != 0 ) {
       die "$0: bowtie2-build exited unsuccessful";
     }
   }
   else {
-    print "Bowtie2 index already exists, not re-creating.\n";
-    print "Using Bowtie2 index at $bowtie_index_dir/$ref_genome_basename.*\n";
+    print "Bowtie index already exists, not re-creating.\n";
+    print "Using Bowtie index at $bowtie_index_dir/$ref_genome_basename.*\n";
   }
 }
 
-=head2 run_bowtie2_mapping
+=head2 run_bowtie_mapping
 
- Title   : run_bowtie2_mapping
- Usage   : $project->run_bowtie2_mapping( num_threads, minins, maxins )
+ Title   : run_bowtie_mapping
+ Usage   : $project->run_bowtie_mapping( num_threads, minins, maxins )
  Function: Aligns reads to the reference genome and saves output file
  Example : $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
-           $project->build_bowtie2_index();
-           $project->run_bowtie2_mapping( 8, 100, 500 );
+           $project->build_bowtie_index();
+           $project->run_bowtie_mapping( 8, 100, 500 );
  Returns : No return value
- Args    : Number of parallel search threads to use for Bowtie 2, numeric length to use for
-           Bowtie 2 -I/--minins parameter, numeric length to use for Bowtie 2 -X/--maxins parameter
+ Args    : Number of parallel search threads to use for Bowtie, numeric length to use for
+           Bowtie -I/--minins parameter, numeric length to use for Bowtie -X/--maxins parameter
 
 =cut
 
-sub run_bowtie2_mapping {
+sub run_bowtie_mapping {
   my $self                = shift;
   my $num_threads         = shift;
   my $minins              = shift;
   my $maxins              = shift;
   my $data_basename       = $self->{"data_basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie2_dir         = $self->{"bowtie_db"}->{"bowtie2_dir"};
+  my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
   my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   my $reads_file_one      = $self->{"bowtie_db"}->{"reads_file_one"};
   my $reads_file_two      = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir            = $self->{"work_dir"};
-  print "Running mapping using bowtie2, using $num_threads threads...\n";
+  print "Running mapping using Bowtie, using $num_threads threads...\n";
 
   # Call bowtie to run the mapping
   my $results = capture(
-        "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
+        "$bowtie_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --sam-no-hd "
       . "--maxins $maxins --minins $minins "
       . "--no-discordant "
@@ -270,25 +270,25 @@ sub run_bowtie2_mapping {
   );
 
   if ( $EXITVAL != 0 ) {
-    die "$0: bowtie2 exited unsuccessful";
+    die "$0: Bowtie exited unsuccessful";
   }
 
 }
 
-=head2 bowtie2_identify
+=head2 bowtie_identify
 
- Title   : bowtie2_identify
- Usage   : $project->bowtie2_identify( $num_threads )
+ Title   : bowtie_identify
+ Usage   : $project->bowtie_identify( $num_threads )
  Function: Identifies half-mapping read pairs from the read alignment output file
- Example : $project->build_bowtie2_index();
+ Example : $project->build_bowtie_index();
            $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
-           $project->bowtie2_identify();
+           $project->bowtie_identify();
  Returns : No return value
  Args    : No argumnets
 
 =cut
 
-sub bowtie2_identify {
+sub bowtie_identify {
   my $self          = shift;
   my $data_basename = $self->{"data_basename"};
   my $work_dir      = $self->{"work_dir"};
@@ -318,7 +318,7 @@ sub bowtie2_identify {
   while ( my $line = $ifh->getline ) {
     next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
-    my ($mate_id, $flag_sum) = ($fields[0], $fields[1]);
+    my ($mate_id, $flags) = ($fields[0], $fields[1]);
 
     # Check if this mate ID is different from the last line
     if ( $mate_id ne $prev_id ) {
@@ -327,13 +327,13 @@ sub bowtie2_identify {
       if ( scalar @print_lines == 2 && $mapping == 1 && $prev_id ne "" ) {
 
         # Check if the pair is discordant
-        my $line1 = shift(@print_lines);
-        my @fd1   = split( /\t/, $line1 );
-        my $flag1 = $fd1[1];
-        my $line2 = shift(@print_lines);
-        my @fd2   = split( /\t/, $line2 );
-        my $flag2 = $fd2[1];
-        if ( &_isDiscordant( $flag1, $flag2 ) ) {
+        my $line1  = shift(@print_lines);
+        my @fd1    = split( /\t/, $line1 );
+        my $flags1 = $fd1[1];
+        my $line2  = shift(@print_lines);
+        my @fd2    = split( /\t/, $line2 );
+        my $flags2 = $fd2[1];
+        if ( &_isDiscordant( $flags1, $flags2 ) ) {
           print $ofh2 "$line1$line2";
         }
         else {
@@ -375,19 +375,19 @@ sub bowtie2_identify {
     }
 
     # At this point we have an alignment we may want to keep, so look at the sum-of-flags value to classify.
-    if ( &_isMapping($flag_sum) ) {
+    if ( &_isMapping($flags) ) {
 
       # Save this full-mapping line for printing
       $mapping = 2;
       push( @print_lines, $line );
     }
-    elsif ( &_isNonMapping($flag_sum) ) {
+    elsif ( &_isNonMapping($flags) ) {
 
       # We have a non-mapping ID. Discard all lines with this ID.
       $mapping         = 0;
       $discard_this_id = 1;
     }
-    elsif ( &_isHalfMapping($flag_sum) ) {
+    elsif ( &_isHalfMapping($flags) ) {
 
       # Save this half-mapping line for printing
       $mapping = 1;
@@ -412,10 +412,10 @@ sub bowtie2_identify {
  Usage   : $project->filter( $num_threads )
  Function: Reduces the number of half-mapping read pairs by re-running alignments using looser
            matching criteria.
- Example : $project->bowtie2_identify();
+ Example : $project->bowtie_identify();
            $project->filter( 8 );
  Returns : No return value
- Args    : Number of parallel search threads to use for Bowtie 2
+ Args    : Number of parallel search threads to use for Bowtie
 
 =cut
 
@@ -425,7 +425,7 @@ sub filter {
   my $work_dir            = $self->{"work_dir"};
   my $data_basename       = $self->{"data_basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie2_dir         = $self->{"bowtie_db"}->{"bowtie2_dir"};
+  my $bowtie_dir         = $self->{"bowtie_db"}->{"bowtie_dir"};
   my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   
   # Define length of each mate for the fake read pairs
@@ -449,16 +449,16 @@ sub filter {
     while ( my $line = $ifh->getline ) {
       next if $line =~ m/^@/;
       my @fields = split( /\t/, $line );
-      my ($id, $flag_sum, $sequence, $quality_scores) = ($fields[0], $fields[1], $fields[9], $fields[10]);
+      my ($id, $flags, $sequence, $quality_scores) = ($fields[0], $fields[1], $fields[9], $fields[10]);
   
       # Create a fake pair from the unaligned mate in the pair
-      if ( &_isUnalignedMate($flag_sum) ) {
+      if ( &_isUnalignedMate($flags) ) {
   
         # Set a flag indicating that we got at least one half-mapping pair
         $have_candidates = 1;
   
         # Reverse complement reads that aligned to the reverse strand, to get original read
-        if ( ( $flag_sum & 16 ) == 1 ) {
+        if ( ( $flags & 16 ) == 1 ) {
           $sequence = &_reverseComplement($sequence);
         }
   
@@ -486,9 +486,9 @@ sub filter {
     }
   }
 
-  # Run Bowtie 2 with the fake read pairs as input
+  # Run Bowtie with the fake read pairs as input
   my $results = capture(
-        "$bowtie2_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
+        "$bowtie_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --sam-no-hd "
       . "--no-mixed --no-discordant --no-contain --no-overlap "
       . "-1 $work_dir/${data_basename}_fake_paired_end_1.fq "
@@ -499,7 +499,7 @@ sub filter {
       "-S $work_dir/${data_basename}_fake_pairs_alignment.sam"
   );
   if ( $EXITVAL != 0 ) {
-    die "$0: bowtie2 exited unsuccessful";
+    die "$0: Bowtie exited unsuccessful";
   }
 
   {
@@ -517,10 +517,10 @@ sub filter {
     while ( my $line = $ifh2->getline ) {
       next if $line =~ m/^@/;
       my @fields = split( /\t/, $line );
-      my ($orig_id, $orig_flag_sum, $other_mate_pos) = ($fields[0], $fields[1], $fields[7]);
+      my ($orig_id, $orig_flags, $other_mate_pos) = ($fields[0], $fields[1], $fields[7]);
  
       # Consider only the unaligned mate from the half-mapping read pair
-      next if !&_isUnalignedMate($orig_flag_sum);
+      next if !&_isUnalignedMate($orig_flags);
   
       # Get the corresponding alignment from the fake pairs
       my $fake_line;
@@ -571,7 +571,7 @@ sub filter {
  Function: Identifies groups of half-mapping read pairs that align to the reference genome at
            locations near one another, and performs a local assembly on the unaligned mates in each
            group
- Example : $project->bowtie2_identify();
+ Example : $project->bowtie_identify();
            $project->filter( 8 );
            $project->assemble_groups( 250, 3 );
  Returns : No return value
@@ -617,17 +617,17 @@ sub assemble_groups {
   my $overlap_dist = 2 * $ins + $intron_length;
 
   my $id;
-  my $flag;
+  my $flags;
   my $pos;
   my $seq;
   my $count = 0;
   while ( my $line = $ifh->getline ) {
     next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
-    my ($id, $flag, $pos, $seq) = ($fields[0], $fields[1], $fields[7], $fields[9]);
+    my ($id, $flags, $pos, $seq) = ($fields[0], $fields[1], $fields[7], $fields[9]);
 
     # Add or discard based on position, treating upstream mates differently from downstream mates
-    if ( ( $flag & 20 ) == 0 ) {
+    if ( ( $flags & 20 ) == 0 ) {
       if ( ( $pos - $last_pos ) < $overlap_dist ) {
         push( @groups, $line );
         print "before: last_pos=$last_pos, pos=$pos\n";
@@ -737,36 +737,36 @@ sub _complement {
 
 # Returns 1 if the given sum-of-flags value identifies a mate in a half-mapping read pair, otherwise returns 0
 sub _isHalfMapping {
-  my $flag = shift;
-  return ( (($flag & 4) != 0) ^ (($flag & 8) != 0) );
+  my $flags = shift;
+  return ( (($flags & 4) != 0) ^ (($flags & 8) != 0) );
 }
 
 # Returns 1 if the given sum-of-flags value identifies an aligning mate, otherwise returns 0
 # Note: Also returns 1 for discordant alignments, which should be suppressed using "--no-discordant"
 sub _isMapping {
-  my $flag = shift;
-  return ( (($flag & 4) == 0) && (($flag & 8) == 0) );
+  my $flags = shift;
+  return ( (($flags & 4) == 0) && (($flags & 8) == 0) );
 }
 
 # Returns 1 if the given sum-of-flags value identifies a mate in a no-alignments pair, otherwise returns 0
 sub _isNonMapping {
-  my $flag = shift;
-  return ( (($flag & 4) != 0) && (($flag & 8) != 0) );
+  my $flags = shift;
+  return ( (($flags & 4) != 0) && (($flags & 8) != 0) );
 }
 
 # Returns 1 if the given sum-of-flags values represent a pair containing mates that align independently but do not meet
 # fragment length constraints, otherwise returns 0
 sub _isDiscordant {
-  my $flag1 = shift;
-  my $flag2 = shift;
-  return ( ((&_isNonMapping($flag1)) && (&_isHalfMapping($flag2)))
-        || ((&_isHalfMapping($flag1)) && (&_isNonMapping($flag2))) );
+  my $flags1 = shift;
+  my $flags2 = shift;
+  return ( ((&_isNonMapping($flags1)) && (&_isHalfMapping($flags2)))
+        || ((&_isHalfMapping($flags1)) && (&_isNonMapping($flags2))) );
 }
 
 # Returns 1 if the given sum-of-flags value identifies an unaligned mate in a half-mapping pair, otherwise returns 0
 sub _isUnalignedMate {
-  my $flag = shift;
-  return ( (($flag & 4) != 0) && (($flag & 8) == 0) );
+  my $flags = shift;
+  return ( (($flags & 4) != 0) && (($flags & 8) == 0) );
 }
 
 # Checks if the given folder exists, and removes trailing slash from string

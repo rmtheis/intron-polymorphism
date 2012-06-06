@@ -15,7 +15,7 @@ This project is under construction--please do not try to use it until it is fini
 
 #### 1. Install Bowtie 2
 
-Download [here](http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-beta5/bowtie2-2.0.0-beta5-linux-x86_64.zip)
+Download [here](http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-beta6/bowtie2-2.0.0-beta6-linux-x86_64.zip)
 
 #### 2. Install Velvet
 
