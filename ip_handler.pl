@@ -53,10 +53,10 @@ my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
 #my $velvet_dir = "/home/theis/intron-polymorphism/velvet";
 
 # Default -I/--minins <int> value for Bowtie
-my $minins = 100;
+my $minins = 200;
 
 # Default -X/--maxins <int> value for Bowtie
-my $maxins = 3000;
+my $maxins = 900;
 
 # Default expected intron length for assembly
 my $intron_length = 250;

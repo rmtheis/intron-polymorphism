@@ -403,14 +403,17 @@ sub filter {
   my $work_dir            = $self->{"work_dir"};
   my $data_basename       = $self->{"data_basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie_dir         = $self->{"bowtie_db"}->{"bowtie_dir"};
+  my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
   my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  my $scripts_dir         = $self->{"scripts_dir"};
+  my $alignfile           = "$work_dir/${data_basename}_alignment.sam";
   
   # Define length of each mate for the fake read pairs
   my $mate_length = 16;
   
   # Define length of read pair for fake paired-end alignment
-  my $read_length = 500;    # TODO get this from infer_fraglen.pl
+  my $read_length = capture("$scripts_dir/infer_fraglen.pl -i $alignfile -m");
+  die "$0: infer_fraglen.pl exited unsuccessful" if ( $EXITVAL !=0 );
   
   {
     my $infile   = "$work_dir/${data_basename}_halfmapping1.sam";
