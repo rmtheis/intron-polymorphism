@@ -738,78 +738,35 @@ sub _complement {
 # Returns 1 if the given sum-of-flags value identifies a mate in a half-mapping read pair, otherwise returns 0
 sub _isHalfMapping {
   my $flag = shift;
-  if ( $flag == 69
-    || $flag == 73
-    || $flag == 89
-    || $flag == 101
-    || $flag == 133
-    || $flag == 137
-    || $flag == 153
-    || $flag == 165 )
-  {
-    return 1;
-  }
-  else {
-    return 0;
-  }
+  return ( (($flag & 4) != 0) ^ (($flag & 8) != 0) );
 }
 
-# Returns 1 if the given sum-of-flags value identifies a mate in a concordant alignment, otherwise returns 0
+# Returns 1 if the given sum-of-flags value identifies an aligning mate, otherwise returns 0
+# Note: Also returns 1 for discordant alignments, which should be suppressed using "--no-discordant"
 sub _isMapping {
   my $flag = shift;
-  if ( $flag == 83
-    || $flag == 99
-    || $flag == 147
-    || $flag == 163 )
-  {
-    return 1;
-  }
-  else {
-    return 0;
-  }
+  return ( (($flag & 4) == 0) && (($flag & 8) == 0) );
 }
 
 # Returns 1 if the given sum-of-flags value identifies a mate in a no-alignments pair, otherwise returns 0
 sub _isNonMapping {
   my $flag = shift;
-  if ( $flag == 77 || $flag == 141 ) {
-    return 1;
-  }
-  else {
-    return 0;
-  }
+  return ( (($flag & 4) != 0) && (($flag & 8) != 0) );
 }
 
-# Returns 1 if the given pair of sum-of-flags values represents mates that align discordantly, otherwise returns 0
+# Returns 1 if the given sum-of-flags values represent a pair containing mates that align independently but do not meet
+# fragment length constraints, otherwise returns 0
 sub _isDiscordant {
   my $flag1 = shift;
   my $flag2 = shift;
-
-  if ( ( $flag1 == 73 && $flag2 == 153 )
-    || ( $flag1 == 153 && $flag2 == 73 )
-    || ( $flag1 == 89  && $flag2 == 137 )
-    || ( $flag1 == 137 && $flag2 == 89 ) )
-  {
-    return 1;
-  }
-  else {
-    return 0;
-  }
+  return ( ((&_isNonMapping($flag1)) && (&_isHalfMapping($flag2)))
+        || ((&_isHalfMapping($flag1)) && (&_isNonMapping($flag2))) );
 }
 
 # Returns 1 if the given sum-of-flags value identifies an unaligned mate in a half-mapping pair, otherwise returns 0
 sub _isUnalignedMate {
   my $flag = shift;
-  if ( $flag == 69
-    || $flag == 101
-    || $flag == 133
-    || $flag == 165 )
-  {
-    return 1;
-  }
-  else {
-    return 0;
-  }
+  return ( (($flag & 4) != 0) && (($flag & 8) == 0) );
 }
 
 # Checks if the given folder exists, and removes trailing slash from string
