@@ -37,11 +37,11 @@ use constant DEBUG => (1);    # Flag to print info for debugging (temporary)
 
 sub new {
   my $self = {};
-  $self->{"scripts_dir"}   = undef;   # Scalar path to scripts directory
-  $self->{"work_dir"}      = undef;   # Scalar path to work directory
-  $self->{"data_basename"} = undef;   # Scalar base filename for read pairs/data
-  $self->{"ref_genome"}    = undef;   # Hash of reference genome related values
-  $self->{"bowtie_db"}     = undef;   # Hash of data directories for bowtie
+  $self->{"scripts_dir"}    = undef;   # Scalar path to scripts directory
+  $self->{"work_dir"}       = undef;   # Scalar path to work directory
+  $self->{"reads_basename"} = undef;   # Scalar base filename for read pairs/data
+  $self->{"ref_genome"}     = undef;   # Hash of reference genome related values
+  $self->{"bowtie_db"}      = undef;   # Hash of data directories for bowtie
   bless($self);
   return $self;
 }
@@ -98,12 +98,12 @@ sub set_work_dir {
 =cut
 
 sub build_db {
-  my $self                = shift;
-  my $ref_genome_filename = shift;
-  my $data_basename       = shift;
+  my $self                 = shift;
+  my $ref_genome_filename  = shift;
+  my $reads_basename       = shift;
 
   # Use the base of the read pairs filenames for saving data throughout pipeline
-  $self->{"data_basename"} = $data_basename;
+  $self->{"reads_basename"} = $reads_basename;
 
   # Split reference genome pathname into components
   my ( $file, $dir, $ext ) = fileparse( $ref_genome_filename, qr/\.[^.]*/ );
@@ -130,32 +130,31 @@ sub build_db {
 =cut
 
 sub mapping_setup {
-  my $self                = shift;
-  my $bowtie_dir          = shift;
-  my $bowtie_index_dir    = shift;
-  my $reads_dir           = shift;
-  my $data_basename       = shift;
-  my $scripts_dir         = $self->{"scripts_dir"};
-  my $work_dir            = $self->{"work_dir"};
-  my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
-  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $ref_genome_dir      = $self->{"ref_genome"}->{"dir"};
+  my $self                 = shift;
+  my $bowtie_dir           = shift;
+  my $bowtie_index_dir     = shift;
+  my $reads_dir            = shift;
+  my $reads_basename       = shift;
+  my $scripts_dir          = $self->{"scripts_dir"};
+  my $work_dir             = $self->{"work_dir"};
+  my $ref_genome           = $self->{"ref_genome"}->{"full_pathname"};
+  my $ref_genome_basename  = $self->{"ref_genome"}->{"basename"};
+  my $ref_genome_dir       = $self->{"ref_genome"}->{"dir"};
   die "$0: reference genome directory $ref_genome_dir does not exist" unless ( -d $ref_genome_dir );
 
   # Perform basic validation on reference genome
-  my $results = capture("$scripts_dir/validate_fasta.pl -i $ref_genome");
+  capture("$scripts_dir/validate_fasta.pl -i $ref_genome");
   die "$0: validate_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Ensure that read pairs files exist
   $reads_dir = $1 if ( $reads_dir =~ /(.*)\/$/ );
-  my $reads_file_one = "$reads_dir/${data_basename}_1.fq";
-  my $reads_file_two = "$reads_dir/${data_basename}_2.fq";
+  my $reads_file_one = "$reads_dir/${reads_basename}_1.fq";
+  my $reads_file_two = "$reads_dir/${reads_basename}_2.fq";
   die "$0: reads file $reads_file_one does not exist" unless ( -e $reads_file_one );
   die "$0: reads file $reads_file_two does not exist" unless ( -e $reads_file_two );
 
   # Perform basic validation on read pairs files
-  $results =
-    capture("$scripts_dir/validate_fastq.pl -i $reads_dir/$data_basename");
+  capture("$scripts_dir/validate_fastq.pl -i $reads_dir/$reads_basename");
   die "$0: validate_fastq.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Create directory for Bowtie index files if necessary
@@ -204,8 +203,7 @@ sub build_bowtie_index {
 
     # Call bowtie-build to create the bowtie index
     print "Creating bowtie index in $bowtie_index_dir...\n";
-    my $results = capture( "$bowtie_dir/bowtie2-build "
-        . "$ref_genome $bowtie_index_dir/$ref_genome_basename" );
+    capture( "$bowtie_dir/bowtie2-build $ref_genome $bowtie_index_dir/$ref_genome_basename" );
     die "$0: bowtie2-build exited unsuccessful" if ( $EXITVAL != 0 );
   }
   else {
@@ -229,28 +227,28 @@ sub build_bowtie_index {
 =cut
 
 sub run_bowtie_mapping {
-  my $self                = shift;
-  my $num_threads         = shift;
-  my $minins              = shift;
-  my $maxins              = shift;
-  my $data_basename       = $self->{"data_basename"};
-  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
-  my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
-  my $reads_file_one      = $self->{"bowtie_db"}->{"reads_file_one"};
-  my $reads_file_two      = $self->{"bowtie_db"}->{"reads_file_two"};
-  my $work_dir            = $self->{"work_dir"};
+  my $self                 = shift;
+  my $num_threads          = shift;
+  my $minins               = shift;
+  my $maxins               = shift;
+  my $reads_basename       = $self->{"reads_basename"};
+  my $ref_genome_basename  = $self->{"ref_genome"}->{"basename"};
+  my $bowtie_dir           = $self->{"bowtie_db"}->{"bowtie_dir"};
+  my $bowtie_index_dir     = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  my $reads_file_one       = $self->{"bowtie_db"}->{"reads_file_one"};
+  my $reads_file_two       = $self->{"bowtie_db"}->{"reads_file_two"};
+  my $work_dir             = $self->{"work_dir"};
   print "Running mapping using Bowtie, using $num_threads threads...\n";
 
   # Call bowtie to run the mapping
-  my $results = capture(
+  capture(
         "$bowtie_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
-      . "--threads $num_threads --reorder --sam-no-hd "
+      . "--threads $num_threads --reorder --no-hd "
       . "--maxins $maxins --minins $minins "
       . "--no-discordant "
       . "--no-contain --no-overlap "
       . "-k 3 -1 $reads_file_one -2 $reads_file_two "
-      . "-S $work_dir/${data_basename}_alignment.sam"
+      . "-S $work_dir/${reads_basename}_alignment.sam"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
 }
@@ -269,21 +267,21 @@ sub run_bowtie_mapping {
 =cut
 
 sub bowtie_identify {
-  my $self          = shift;
-  my $data_basename = $self->{"data_basename"};
-  my $work_dir      = $self->{"work_dir"};
+  my $self           = shift;
+  my $reads_basename = $self->{"reads_basename"};
+  my $work_dir       = $self->{"work_dir"};
 
   print "Identifying half-mapping read pairs...\n";
 
 # # Remove all rows we're not interested in now
-# my $results = capture( "cut -f 1,2,4,10,11 $work_dir/${data_basename}_alignment.sam " .
-#        "> $work_dir/${data_basename}_alignment_pruned" );
+# capture( "cut -f 1,2,4,10,11 $work_dir/${reads_basename}_alignment.sam " .
+#        "> $work_dir/${reads_basename}_alignment_pruned" );
 # die "$0: cut exited unsuccessful" if( $EXITVAL != 0 );
 
-  my $infile   = "$work_dir/${data_basename}_alignment.sam";
-  my $outfile  = "$work_dir/${data_basename}_halfmapping1.sam";
-  my $outfile2 = "$work_dir/${data_basename}_halfmapping2.sam";
-  my $outfile3 = "$work_dir/${data_basename}_multmapping.sam";
+  my $infile   = "$work_dir/${reads_basename}_alignment.sam";
+  my $outfile  = "$work_dir/${reads_basename}_halfmapping1.sam";
+  my $outfile2 = "$work_dir/${reads_basename}_halfmapping2.sam";
+  my $outfile3 = "$work_dir/${reads_basename}_multmapping.sam";
   my $ifh  = IO::File->new( $infile, 'r' ) or die "Can't open $infile: $!";
   my $ofh  = IO::File->new( $outfile, 'w' ) or die "Can't create $outfile: $!";
   my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "Can't create $outfile2: $!";
@@ -401,12 +399,12 @@ sub filter {
   my $self                = shift;
   my $num_threads         = shift;
   my $work_dir            = $self->{"work_dir"};
-  my $data_basename       = $self->{"data_basename"};
+  my $reads_basename      = $self->{"reads_basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
   my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   my $scripts_dir         = $self->{"scripts_dir"};
-  my $alignfile           = "$work_dir/${data_basename}_alignment.sam";
+  my $alignfile           = "$work_dir/${reads_basename}_alignment.sam";
   
   # Define length of each mate for the fake read pairs
   my $mate_length = 16;
@@ -416,9 +414,9 @@ sub filter {
   die "$0: infer_fraglen.pl exited unsuccessful" if ( $EXITVAL !=0 );
   
   {
-    my $infile   = "$work_dir/${data_basename}_halfmapping1.sam";
-    my $outfile1 = "$work_dir/${data_basename}_fake_paired_end_1.fq";
-    my $outfile2 = "$work_dir/${data_basename}_fake_paired_end_2.fq";
+    my $infile   = "$work_dir/${reads_basename}_halfmapping1.sam";
+    my $outfile1 = "$work_dir/${reads_basename}_fake_paired_end_1.fq";
+    my $outfile2 = "$work_dir/${reads_basename}_fake_paired_end_2.fq";
     my $ifh  = IO::File->new( $infile, 'r' ) or die "$0: Can't open $infile: $!";
     my $ofh1 = IO::File->new( $outfile1, 'w' ) or die "$0: Can't open $outfile1: $!";
     my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "$0: Can't open $outfile2: $!";
@@ -468,25 +466,22 @@ sub filter {
   }
 
   # Run Bowtie with the fake read pairs as input
-  my $results = capture(
+  capture(
         "$bowtie_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
-      . "--threads $num_threads --reorder --sam-no-hd "
+      . "--threads $num_threads --reorder --no-hd "
       . "--no-mixed --no-discordant --no-contain --no-overlap "
-      . "-1 $work_dir/${data_basename}_fake_paired_end_1.fq "
-      . "-2 $work_dir/${data_basename}_fake_paired_end_2.fq "
-      .
-
-      #"--al-conc $work_dir/${data_basename}_fake_pairs_al-conc.%.fq " .
-      "-S $work_dir/${data_basename}_fake_pairs_alignment.sam"
+      . "-1 $work_dir/${reads_basename}_fake_paired_end_1.fq "
+      . "-2 $work_dir/${reads_basename}_fake_paired_end_2.fq "
+      . "-S $work_dir/${reads_basename}_fake_pairs_alignment.sam"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
 
   {
     # Find reads representing insertions/deletions by considering all the fake pairs that aligned
-    my $infile1  = "$work_dir/${data_basename}_fake_pairs_alignment.sam";
-    my $infile2  = "$work_dir/${data_basename}_halfmapping1.sam";
-    my $outfile1 = "$work_dir/${data_basename}_filtered.sam";
-    my $outfile2 = "$work_dir/${data_basename}_fake_pairs_alignment.debug" if DEBUG;
+    my $infile1  = "$work_dir/${reads_basename}_fake_pairs_alignment.sam";
+    my $infile2  = "$work_dir/${reads_basename}_halfmapping1.sam";
+    my $outfile1 = "$work_dir/${reads_basename}_filtered.sam";
+    my $outfile2 = "$work_dir/${reads_basename}_fake_pairs_alignment.debug" if DEBUG;
     my $ifh1 = IO::File->new( $infile1, 'r' ) or die "$0: Can't open $infile1: $!";
     my $ifh2 = IO::File->new( $infile2, 'r' ) or die "$0: Can't open $infile2: $!";
     my $ofh1 = IO::File->new( $outfile1, 'w' ) or die "$0: Can't open $outfile1: $!";
@@ -560,30 +555,28 @@ sub filter {
 =cut
 
 sub assemble_groups {
-  my $self          = shift;
-  my $intron_length = shift;
-  my $min_aln       = shift;
-  my $work_dir      = $self->{"work_dir"};
-  my $data_basename = $self->{"data_basename"};
+  my $self           = shift;
+  my $intron_length  = shift;
+  my $min_aln        = shift;
+  my $work_dir       = $self->{"work_dir"};
+  my $reads_basename = $self->{"reads_basename"};
 
-  my $halfmap1_file = "$work_dir/${data_basename}_filtered.sam";
-  my $halfmap2_file = "$work_dir/${data_basename}_halfmapping2.sam";
-  my $halfmap_all_file = "$work_dir/${data_basename}_halfmapping_all.sam";
-  my $sorted_file = "$work_dir/${data_basename}_halfmapping_all_sorted.sam";
+  my $halfmap1_file = "$work_dir/${reads_basename}_filtered.sam";
+  my $halfmap2_file = "$work_dir/${reads_basename}_halfmapping2.sam";
+  my $halfmap_all_file = "$work_dir/${reads_basename}_halfmapping_all.sam";
+  my $sorted_file = "$work_dir/${reads_basename}_halfmapping_all_sorted.sam";
 
   # Insert length
   my $ins = 100;
 
   # Sort by alignment positionn
-  my $results = capture(
-    "cat $halfmap1_file " .
+  capture("cat $halfmap1_file " .
       #"$halfmap2_file " .
       "> $halfmap_all_file"
   );
   die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
 
-  $results = capture(
-    "sort -k 8,8 -n -o $sorted_file $halfmap_all_file" );
+  capture( "sort -k 8,8 -n -o $sorted_file $halfmap_all_file" );
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Get the clusters one at a time
@@ -622,7 +615,7 @@ sub assemble_groups {
 
       # Open output file
       ++$count;
-      my $outfile = "$work_dir/velvet-data/${data_basename}_group_$count.txt";
+      my $outfile = "$work_dir/velvet-data/${reads_basename}_group_$count.txt";
       my $ofh = IO::File->new( $outfile, 'w' ) or die "$0: Can't open $outfile: $!";
 
       while ( scalar(@groups) > 0 ) {
@@ -630,14 +623,14 @@ sub assemble_groups {
       }
       $ofh->close();
       my $outdir = "$work_dir/velvet-data/group_${count}/";
-      $results = capture( "velveth $outdir 13 -sam -short $outfile" );
+      capture( "velveth $outdir 13 -sam -short $outfile" );
       die "$0: velveth exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Delete the SAM file of read data unless we're debugging
       #unlink( $outfile ) if !DEBUG or die "$0: cannot delete $outfile: $!";
 
       # Run velvetg on groups
-      $results = capture("velvetg $outdir");
+      capture("velvetg $outdir");
       die "$0: velvetg exited unsuccessful" if ( $EXITVAL != 0 );
     }
     else {

@@ -41,7 +41,7 @@ my $reads_dir = "/home/theis/intron-polymorphism/testdata";
 
 # Base of the unmapped reads filenames, without "_1.fq" or "_2.fq" extension (FastQ format)
 # This base filename will be used for all data subsequently generated from these reads.
-my $data_basename = "E100000";
+my $reads_basename = "E100000";
 
 # Directory name where the bowtie executables are located
 my $bowtie_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta6";
@@ -53,10 +53,10 @@ my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
 #my $velvet_dir = "/home/theis/intron-polymorphism/velvet";
 
 # Default -I/--minins <int> value for Bowtie
-my $minins = 200;
+my $minins = 300;
 
 # Default -X/--maxins <int> value for Bowtie
-my $maxins = 900;
+my $maxins = 700;
 
 # Default expected intron length for assembly
 my $intron_length = 250;
@@ -68,17 +68,12 @@ my $min_mates = 2;
 # INITIALIZE THE PIPELINE #
 ###########################
 
-# Check for invalid input
-if ($data_basename eq "") {
-  print "Error: data_basename not initialized. Set a value for data_basename.\n";
-}
-
 # Set default number of threads to number of available cores
 my $bowtie_num_threads = Sys::CPU::cpu_count();
 
 # Parse command-line options, overriding any default options set above
 GetOptions(
-  'b:s' => \$data_basename,
+  'b:s' => \$reads_basename,
   'g:s' => \$ref_genome_filename,
   'k:s' => \$skip_to,
   'l:i' => \$intron_length,
@@ -88,6 +83,11 @@ GetOptions(
   't:s' => \$bowtie_num_threads,
 ) || die "$0: Bad option";
 
+# Check for invalid input
+if ($reads_basename eq "") {
+  print "Error: reads_basename not initialized. Set a value for reads_basename.\n";
+}
+
 # Initialize the project
 my $project = IntronPoly->new();
 
@@ -95,7 +95,10 @@ my $project = IntronPoly->new();
 my $work_dir = $project->set_work_dir( $scripts_dir, $resume_work_dir );
 
 # Set paths to data used throughout pipeline
-$project->build_db( $ref_genome_filename, $data_basename );
+$project->build_db(
+    $ref_genome_filename,
+    $reads_basename,
+  );
 
 # Track whether mapping-related parameters have been set
 my $mapping_setup_completed = 0;
@@ -126,7 +129,7 @@ $project->mapping_setup(
   $bowtie_dir,
   $bowtie_index_dir,
   $reads_dir,
-  $data_basename,
+  $reads_basename,
 );
 $mapping_setup_completed = 1;
 
@@ -145,7 +148,7 @@ if ($mapping_setup_completed != 1) {
     $bowtie_dir,
     $bowtie_index_dir,
     $reads_dir,
-    $data_basename,
+    $reads_basename,
   );
 }
 

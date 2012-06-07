@@ -33,7 +33,7 @@ GetOptions(
   'm' => \$median # Optional flag for reporting only median fragment length. Default: binned output
 ) || die "$0: Bad option";
 
-my $ifh  = IO::File->new( $infile, 'r' ) or die "Can't open $infile: $!";
+my $ifh = IO::File->new( $infile, 'r' ) or die "Can't open $infile: $!";
 my $bin_size = 10;
 my %fragments = ();
 while ( my $line1 = $ifh->getline ) {
