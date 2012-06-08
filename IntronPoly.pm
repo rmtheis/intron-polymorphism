@@ -49,14 +49,12 @@ sub new {
 =head2 set_work_dir
 
  Title   : set_work_dir
- Usage:  : $project->set_work_dir( "path_to_scripts" , "" )
+ Usage:  : $project->set_work_dir( "path_to_scripts" )
  Function: Creates directory for pipeline working data and output files
  Example : my $work_dir = "/home/theis/work";
-           my $resume_dir = "";
-           $project->set_work_dir( $scripts_dir, $resume_dir )
+           $project->set_work_dir( $scripts_dir )
  Returns : The path to the directory for pipeline working data and output files
- Args    : Scalar of full path to the parent directory of the work directory, and a scalar of 
-           full path to work folder from a previous run (or containing existing unmapped read pairs)
+ Args    : Scalar of full path to the parent directory of the work directory
 
 =cut
 

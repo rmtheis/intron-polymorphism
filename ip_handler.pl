@@ -32,10 +32,6 @@ my $scripts_dir = "/home/theis/intron-polymorphism";
 # Reference genome filename (FastA format)
 my $ref_genome_filename = "/home/theis/intron-polymorphism/testdata/NC_008253.fna";
 
-# Previously used output directory name, for restarting a partially completed run 
-# Leave this option empty ("") to start a new run of the pipeline
-my $resume_work_dir = "";
-
 # Directory where the unmapped reads are located
 my $reads_dir = "/home/theis/intron-polymorphism/testdata";
 
@@ -62,7 +58,7 @@ my $maxins = 700;
 my $intron_length = 250;
 
 # Default minimum number of nearby half-mapping mates needed to perform local assembly on group
-my $min_mates = 2;
+my $min_mates = 10;
 
 ###########################
 # INITIALIZE THE PIPELINE #
@@ -92,7 +88,7 @@ if ($reads_basename eq "") {
 my $project = IntronPoly->new();
 
 # Create output directory
-my $work_dir = $project->set_work_dir( $scripts_dir, $resume_work_dir );
+my $work_dir = $project->set_work_dir( $scripts_dir );
 
 # Set paths to data used throughout pipeline
 $project->build_db(
@@ -106,10 +102,6 @@ my $mapping_setup_completed = 0;
 ##############################
 # JUMP TO THE REQUESTED STEP #
 ##############################
-
-if ( defined $skip_to && $skip_to ne "" && !(-e $resume_work_dir )) {
-  die "$0: resume_work_directory not found";
-}
 
 if ( $skip_to eq "C" ) { print "Skipping to collecting\n"; goto COLLECTION; }
 if ( $skip_to eq "F" ) { print "Skipping to filtering\n";  goto FILTERING; }
