@@ -687,16 +687,21 @@ sub align_groups() {
   my $reads_file_two       = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir             = $self->{"work_dir"};
   my $contigs_file         = "$work_dir/${reads_basename}_contigs_all.fa";
-
+  my $output_file          = "$work_dir/${reads_basename}_contigs_alignment.sam";
+  my $output_file_sorted   = "$work_dir/${reads_basename}_contigs_alignment_sorted.sam";
+  
   # Call bowtie to run the mapping
   capture(
         "$bowtie_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --no-hd "
       . "-U $contigs_file -f "
       . "--no-unal "
-      . "-S $work_dir/${reads_basename}_contigs_alignment.sam"
+      . "-S $output_file"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+  
+  # Sort the output file
+  capture( "sort -k 5,5 -n -r -o $output_file_sorted $output_file" );
 }
 
 ############ Subroutines for internal use by this module ############
