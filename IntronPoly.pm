@@ -563,38 +563,48 @@ sub assemble_groups {
   my $halfmap2_file = "$work_dir/${reads_basename}_halfmapping2.sam";
   my $halfmap_all_file = "$work_dir/${reads_basename}_halfmapping_all.sam";
   my $sorted_file = "$work_dir/${reads_basename}_halfmapping_all_sorted.sam";
+  my $velvet_dir = "$work_dir/velvet-data";
+  my $results_file = "$work_dir/${reads_basename}_contigs_all.fa";
 
-  # Insert length
+  # Define the insert length value. TODO compute this
   my $ins = 100;
 
-  # Sort by alignment positionn
   capture("cat $halfmap1_file " .
       #"$halfmap2_file " .
       "> $halfmap_all_file"
   );
   die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
 
+  # Sort by alignment position
   capture( "sort -k 8,8 -n -o $sorted_file $halfmap_all_file" );
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
-
+  
   # Get the clusters one at a time
   my $ifh = IO::File->new( $sorted_file, 'r' ) or die "$0: $sorted_file: $!";
+  my $ofh2 = IO::File->new( $results_file, 'w' ) or die "$0: $results_file: $!";
   my @groups = ();
   my $last_pos = 0;
+  my $last_chr;
   my $overlap_dist = 2 * $ins + $intron_length;
   my $count = 0;
+  my $new_group = 1;
+  my $left_pos = 0;
   while ( my $line = $ifh->getline ) {
     next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
-    my ($id, $flags, $pos, $seq) = ($fields[0], $fields[1], $fields[7], $fields[9]);
+    my ($id, $flags, $chr, $pos, $seq) = ($fields[0], $fields[1], $fields[2], $fields[7], $fields[9]);
 
+    # Record the first position in the group
+    if ($new_group == 1) {
+      $left_pos = $pos;
+      $new_group = 0;
+    }
+    
     # Add or discard based on position, treating upstream mates differently from downstream mates
     if ( ( $flags & 20 ) == 0 ) {
       if ( ( $pos - $last_pos ) < $overlap_dist ) {
         push( @groups, $line );
-        print "before: last_pos=$last_pos, pos=$pos\n";
         $last_pos = $pos;
-        print "after: last_pos=$last_pos, pos=$pos\n";
         next;
       }
       $last_pos = $pos;
@@ -607,7 +617,7 @@ sub assemble_groups {
       }
       $last_pos = $pos;
     }
-
+    
     # Run velveth on groups of 2 or more reads using stdout
     if ( scalar(@groups) >= $min_aln ) {
 
@@ -620,7 +630,7 @@ sub assemble_groups {
         print $ofh shift(@groups);
       }
       $ofh->close();
-      my $outdir = "$work_dir/velvet-data/group_${count}/";
+      my $outdir = "$velvet_dir/group_${count}/";
       capture( "velveth $outdir 13 -sam -short $outfile" );
       die "$0: velveth exited unsuccessful" if ( $EXITVAL != 0 );
 
@@ -630,14 +640,29 @@ sub assemble_groups {
       # Run velvetg on groups
       capture("velvetg $outdir");
       die "$0: velvetg exited unsuccessful" if ( $EXITVAL != 0 );
+      
+      # Append results to the multi-FastA output file
+      #capture("cat $outdir/contigs.fa >> $results_file");
+      #die "$0: cat exited unsuccessful" if ( $EXITVAL != 0);
+      
+      my $ifh2 = IO::File->new( "$outdir/contigs.fa", 'r' ) or die "$0: $outdir/contigs.fa: $!";
+
+      while ( my $contig_line = $ifh2->getline ) {
+        if ($contig_line =~ m/^>/) {
+          print $ofh2 ">Group_${count}_(${left_pos}-${last_pos})_" . substr($contig_line, 1);
+        } else {
+          print $ofh2 $contig_line;
+        }
+      }
+      $ifh2->close;
     }
     else {
       @groups = ();
     }
-
+    $new_group = 1;
   }
-  $ifh->close();
-
+  $ifh->close;
+  $ofh2->close;
 }
 
 ############ Subroutines for internal use by this module ############
