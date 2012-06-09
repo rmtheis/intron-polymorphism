@@ -58,7 +58,7 @@ my $maxins = 700;
 my $intron_length = 250;
 
 # Default minimum number of nearby half-mapping mates needed to perform local assembly on group
-my $min_mates = 10;
+my $min_mates = 3;
 
 ###########################
 # INITIALIZE THE PIPELINE #
@@ -155,8 +155,9 @@ ASSEMBLY:
 print "Running ASSEMBLY...\n";
 $project->assemble_groups( $intron_length, $min_mates );
 
-#ALIGNMENT:
-
+ALIGNMENT:
+print "Running ALIGNMENT...\n";
+$project->align_groups( $bowtie_num_threads );
 
 #ANALYSIS:
 

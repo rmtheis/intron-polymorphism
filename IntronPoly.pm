@@ -665,6 +665,40 @@ sub assemble_groups {
   $ofh2->close;
 }
 
+=head2 align_groups
+
+ Title   : align_groups
+ Usage   : $project->align_groups()
+ Function: 
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
+sub align_groups() {
+  my $self                 = shift;
+  my $num_threads          = shift;
+  my $reads_basename       = $self->{"reads_basename"};
+  my $ref_genome_basename  = $self->{"ref_genome"}->{"basename"};
+  my $bowtie_dir           = $self->{"bowtie_db"}->{"bowtie_dir"};
+  my $bowtie_index_dir     = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  my $reads_file_one       = $self->{"bowtie_db"}->{"reads_file_one"};
+  my $reads_file_two       = $self->{"bowtie_db"}->{"reads_file_two"};
+  my $work_dir             = $self->{"work_dir"};
+  my $contigs_file         = "$work_dir/${reads_basename}_contigs_all.fa";
+
+  # Call bowtie to run the mapping
+  capture(
+        "$bowtie_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
+      . "--threads $num_threads --reorder --no-hd "
+      . "-U $contigs_file -f "
+      . "--no-unal "
+      . "-S $work_dir/${reads_basename}_contigs_alignment.sam"
+  );
+  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+}
+
 ############ Subroutines for internal use by this module ############
 
 # Returns the reverse complement of the given string
