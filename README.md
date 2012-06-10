@@ -17,6 +17,11 @@ This project is under construction--please do not try to use it until it is fini
 
 Download [here](http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-beta6/bowtie2-2.0.0-beta6-linux-x86_64.zip)
 
+or
+
+    wget http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-beta6/bowtie2-2.0.0-beta6-linux-x86_64.zip
+    unzip bowtie2-2.0.0-beta6-linux-x86_64.zip
+
 #### 2. Install Velvet
 
     git clone git://github.com/dzerbino/velvet.git velvet
