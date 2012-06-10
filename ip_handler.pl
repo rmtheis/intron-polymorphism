@@ -58,7 +58,7 @@ my $maxins = 700;
 my $intron_length = 250;
 
 # Default minimum number of nearby half-mapping mates needed to perform local assembly on group
-my $min_mates = 3;
+my $min_mates = 10;
 
 ###########################
 # INITIALIZE THE PIPELINE #

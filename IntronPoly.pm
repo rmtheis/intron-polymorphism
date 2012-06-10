@@ -42,6 +42,7 @@ sub new {
   $self->{"reads_basename"} = undef;   # Scalar base filename for read pairs/data
   $self->{"ref_genome"}     = undef;   # Hash of reference genome related values
   $self->{"bowtie_db"}      = undef;   # Hash of data directories for bowtie
+  $self->{"read_length"}    = undef;   # Median read length determined from alignment
   bless($self);
   return $self;
 }
@@ -410,6 +411,7 @@ sub filter {
   # Define length of read pair for fake paired-end alignment
   my $read_length = capture("$scripts_dir/infer_fraglen.pl -i $alignfile -m");
   die "$0: infer_fraglen.pl exited unsuccessful" if ( $EXITVAL !=0 );
+  $self->{"read_length"} = $read_length;
   
   {
     my $infile   = "$work_dir/${reads_basename}_halfmapping1.sam";
@@ -558,16 +560,13 @@ sub assemble_groups {
   my $min_aln        = shift;
   my $work_dir       = $self->{"work_dir"};
   my $reads_basename = $self->{"reads_basename"};
-
+  my $read_length    = $self->{"read_length"};
   my $halfmap1_file = "$work_dir/${reads_basename}_filtered.sam";
   my $halfmap2_file = "$work_dir/${reads_basename}_halfmapping2.sam";
   my $halfmap_all_file = "$work_dir/${reads_basename}_halfmapping_all.sam";
   my $sorted_file = "$work_dir/${reads_basename}_halfmapping_all_sorted.sam";
   my $velvet_dir = "$work_dir/velvet-data";
   my $results_file = "$work_dir/${reads_basename}_contigs_all.fa";
-
-  # Define the insert length value. TODO compute this
-  my $ins = 100;
 
   capture("cat $halfmap1_file " .
       #"$halfmap2_file " .
@@ -585,7 +584,7 @@ sub assemble_groups {
   my @groups = ();
   my $last_pos = 0;
   my $last_chr;
-  my $overlap_dist = 2 * $ins + $intron_length;
+  my $overlap_dist;
   my $count = 0;
   my $new_group = 1;
   my $left_pos = 0;
@@ -594,6 +593,9 @@ sub assemble_groups {
     my @fields = split( /\t/, $line );
     my ($id, $flags, $chr, $pos, $seq) = ($fields[0], $fields[1], $fields[2], $fields[7], $fields[9]);
 
+    # Calculate overlap distance for this alignment. distance = 2 x insert_length + intron_length
+    $overlap_dist = 2 * ($read_length - 2 * length($seq)) + $intron_length;
+    
     # Record the first position in the group
     if ($new_group == 1) {
       $left_pos = $pos;
@@ -610,7 +612,7 @@ sub assemble_groups {
       $last_pos = $pos;
     }
     else {
-      if ( ( $pos - $last_pos ) < ( $ins - length($seq) + $intron_length ) ) {
+      if ( ( $pos - $last_pos ) < ( ($read_length - 2 * length($seq)) - length($seq) + $intron_length ) ) {
         push( @groups, $line );
         $last_pos = $pos;
         next;
