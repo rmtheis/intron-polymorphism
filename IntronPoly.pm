@@ -609,11 +609,11 @@ sub filter1 {
            group
  Example : $project->bowtie_identify();
            $project->filter( 8 );
-           $project->assemble_groups( 250, 3 );
+           $project->assemble_groups( 250, 3, 13 );
  Returns : No return value
  Args    : Expected intron length for group identification, Minimum number of unaligned mates
            from half-mapping read pairs needed near one another to consider them to be a group,
-           path to file containing half-mapping reads (optional)
+           Velvet coverage cutoff value, path to file containing half-mapping reads (optional)
 
 =cut
 
@@ -621,6 +621,7 @@ sub assemble_groups {
   my $self                = shift;
   my $intron_length       = shift;
   my $num_aln             = shift;
+  my $cov_cutoff          = shift;
   my $halfmap_file        = shift || $self->{"halfmapping_file"};
   my $work_dir            = $self->{"work_dir"};
   my $reads_basename      = $self->{"reads_basename"};
@@ -690,7 +691,7 @@ sub assemble_groups {
       }
       $ofh->close();
       my $outdir = "$velvet_dir/group_${count}/";
-      capture( "velveth $outdir 13 -sam -short $outfile" );
+      capture( "velveth $outdir $cov_cutoff -sam -short $outfile" );
       die "$0: velveth exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Delete the SAM file of read data unless we're debugging

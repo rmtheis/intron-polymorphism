@@ -60,6 +60,9 @@ my $intron_length = 250;
 # Default minimum number of nearby half-mapping mates needed to perform local assembly on group
 my $num_aln = 10;
 
+# Default Velvet coverage cutoff
+my $cov_cutoff = 13;
+
 # Path to existing SAM data, for restarting run or using existing run data. Leave blank for new run
 my $existing_alignment_file = "";
 my $existing_halfmapping_file = "";
@@ -76,6 +79,7 @@ my $bowtie_num_threads = Sys::CPU::cpu_count();
 GetOptions(
   'a:s' => \$existing_alignment_file,    # Path to SAM format file containing existing read alignment data
   'b:s' => \$reads_basename,             # Base of the read pairs filename, not including its extension
+  'c:i' => \$cov_cutoff,                 # Velvet coverage cutoff value
   'g:s' => \$ref_genome_file,            # Path to FastA format reference genome
   'h:s' => \$existing_halfmapping_file,  # Path to SAM format file containing existing half-mapping read pairs
   'k:s' => \$skip_to,                    # Pipeline step to skip ahead to
@@ -141,7 +145,7 @@ $project->filter1();
 
 ASSEMBLY:
 print "Running ASSEMBLY...\n";
-$project->assemble_groups( $intron_length, $num_aln );
+$project->assemble_groups( $intron_length, $num_aln, $cov_cutoff );
 
 ALIGNMENT:
 print "Running ALIGNMENT...\n";
