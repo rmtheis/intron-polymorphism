@@ -30,7 +30,7 @@ my $skip_to = "";
 my $scripts_dir = "/home/theis/intron-polymorphism";
 
 # Reference genome filename (FastA format)
-my $ref_genome_filename = "/home/theis/intron-polymorphism/testdata/NC_008253.fna";
+my $ref_genome_file = "/home/theis/intron-polymorphism/testdata/NC_008253.fna";
 
 # Directory where the unmapped reads are located
 my $reads_dir = "/home/theis/intron-polymorphism/testdata";
@@ -58,7 +58,12 @@ my $maxins = 700;
 my $intron_length = 250;
 
 # Default minimum number of nearby half-mapping mates needed to perform local assembly on group
-my $min_mates = 10;
+my $num_aln = 10;
+
+# Path to existing SAM data, for restarting run or using existing run data. Leave blank for new run
+my $existing_alignment_file = "";
+my $existing_halfmapping_file = "";
+
 
 ###########################
 # INITIALIZE THE PIPELINE #
@@ -69,14 +74,17 @@ my $bowtie_num_threads = Sys::CPU::cpu_count();
 
 # Parse command-line options, overriding any default options set above
 GetOptions(
-  'b:s' => \$reads_basename,
-  'g:s' => \$ref_genome_filename,
-  'k:s' => \$skip_to,
-  'l:i' => \$intron_length,
-  'max:i' => \$maxins,
-  'min:i' => \$minins,
-  'rd:s' => \$reads_dir,
-  't:s' => \$bowtie_num_threads,
+  'a:s' => \$existing_alignment_file,    # Path to SAM format file containing existing read alignment data
+  'b:s' => \$reads_basename,             # Base of the read pairs filename, not including its extension
+  'g:s' => \$ref_genome_file,            # Path to FastA format reference genome
+  'h:s' => \$existing_halfmapping_file,  # Path to SAM format file containing existing half-mapping read pairs
+  'k:s' => \$skip_to,                    # Pipeline step to skip ahead to
+  'l:i' => \$intron_length,              # Intron length for calculating overlap for mate grouping
+  'max:i' => \$maxins,                   # Maximum insert length, used for initial alignment
+  'min:i' => \$minins,                   # Minimum insert length, used for initial alignment
+  'n:i' => \$num_aln,                    # Minimum number of alignments per group
+  'rd:s' => \$reads_dir,                 # Directory containing the FastQ format read pairs files
+  't:s' => \$bowtie_num_threads,         # Number of threads to use for running Bowtie
 ) || die "$0: Bad option";
 
 # Check for invalid input
@@ -92,12 +100,9 @@ my $work_dir = $project->set_work_dir( $scripts_dir );
 
 # Set paths to data used throughout pipeline
 $project->build_db(
-    $ref_genome_filename,
-    $reads_basename,
-  );
-
-# Track whether mapping-related parameters have been set
-my $mapping_setup_completed = 0;
+  $ref_genome_file,
+  $reads_basename,
+);
 
 ##############################
 # JUMP TO THE REQUESTED STEP #
@@ -115,45 +120,28 @@ if ( $skip_to eq "N" ) { print "Skippint to analysis\n";   goto ANALYSIS; }
 
 MAPPING:
 print "Running MAPPING...\n";
-
-# Set mapping-related parameters
 $project->mapping_setup(
   $bowtie_dir,
   $bowtie_index_dir,
   $reads_dir,
   $reads_basename,
 );
-$mapping_setup_completed = 1;
-
-# Build the index required for Bowtie to run
 $project->build_bowtie_index();
-
-# Map the reads to the reference genome to identify unaligning pairs
 $project->run_bowtie_mapping( $bowtie_num_threads, $minins, $maxins );
 
 COLLECTION:
 print "Running COLLECTION...\n";
-
-# Ensure mapping-related parameters are set, in case we skipped to this step
-if ($mapping_setup_completed != 1) {
-  $project->mapping_setup(
-    $bowtie_dir,
-    $bowtie_index_dir,
-    $reads_dir,
-    $reads_basename,
-  );
-}
-
-# Identify all the half-mapping read pairs
-$project->bowtie_identify();
+$project->bowtie_identify( $existing_alignment_file );
 
 FILTERING:
 print "Running FILTERING...\n";
-$project->filter( $bowtie_num_threads );
+$project->create_fake_pairs( $existing_alignment_file, $existing_halfmapping_file );
+$project->run_fake_pairs_alignment( $bowtie_num_threads );
+$project->filter1();
 
 ASSEMBLY:
 print "Running ASSEMBLY...\n";
-$project->assemble_groups( $intron_length, $min_mates );
+$project->assemble_groups( $intron_length, $num_aln );
 
 ALIGNMENT:
 print "Running ALIGNMENT...\n";
