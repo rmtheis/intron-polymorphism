@@ -211,7 +211,7 @@ sub build_bowtie_index {
   }
   else {
     print "Bowtie index already exists, not re-creating.\n";
-    print "Using Bowtie index at $bowtie_index_dir/$ref_genome_basename.*\n";
+    print "Using Bowtie index at $bowtie_index_dir/$ref_genome_basename.*.bt2\n";
   }
 }
 
@@ -635,15 +635,16 @@ sub assemble_groups {
   print "Performing local assemblies...\n";
   
   # Sort by alignment position
-  capture( "sort -k 8,8 -n -o $sorted_file $halfmap_file" );
+  capture( "sort -k3,3 -k8n,8 -o $sorted_file $halfmap_file" );
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
   
-  # Get the clusters one at a time
+  # Get the groups one at a time
   my $ifh = IO::File->new( $sorted_file, 'r' ) or die "$0: $sorted_file: $!";
   my $ofh2 = IO::File->new( $results_file, 'w' ) or die "$0: $results_file: $!";
   my @groups = ();
   my $last_pos = 0;
   my $last_chr;
+  my $last_len = 0;
   my $overlap_dist;
   my $count = 0;
   my $new_group = 1;
@@ -651,9 +652,9 @@ sub assemble_groups {
   while ( my $line = $ifh->getline ) {
     next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
-    my ($id, $flags, $chr, $pos, $seq) = ($fields[0], $fields[1], $fields[2], $fields[7], $fields[9]);
+    my ($id, $flags, $chr, $pos, $seq) = ($fields[0], int($fields[1]), $fields[2], $fields[7], $fields[9]);
 
-    # Calculate overlap distance for this alignment. distance = 2 x insert_length + intron_length
+    # Calculate overlap distance for this alignment as distance = 2 x insert_length + intron_length
     $overlap_dist = 2 * ($frag_length - 2 * length($seq)) + $intron_length;
     
     # Record the first position in the group
@@ -663,22 +664,29 @@ sub assemble_groups {
     }
     
     # Add or discard based on position, treating upstream mates differently from downstream mates
-    if ( ( $flags & 20 ) == 0 ) {
-      if ( ( $pos - $last_pos ) < $overlap_dist ) {
+    if ( (($flags & 8) == 0) && (($flags & 0x20 ) == 0) ) { # 69 or 133
+      if ( (( $pos - ($frag_length - length($seq)) - $last_len ) - $last_pos) < $overlap_dist
+          && (($chr eq $last_chr) || $last_chr eq "" )) {
+        push( @groups, $line );
+        $last_pos = $pos - ($frag_length - length($seq));
+        $last_chr = $chr;
+        $last_len = length($seq);
+        next;
+      }
+      $last_pos = $pos - ($frag_length - length($seq));
+    } else { # 101 or 165
+      if ( (( $pos - $last_pos ) - $last_len) <= $overlap_dist
+          && (($chr eq $last_chr) || $last_chr eq "" )) {
         push( @groups, $line );
         $last_pos = $pos;
+        $last_chr = $chr;
+        $last_len = length($seq);
         next;
       }
       $last_pos = $pos;
     }
-    else {
-      if ( ( $pos - $last_pos ) < ( ($frag_length - 2 * length($seq)) - length($seq) + $intron_length ) ) {
-        push( @groups, $line );
-        $last_pos = $pos;
-        next;
-      }
-      $last_pos = $pos;
-    }
+    $last_chr = $chr;
+    $last_len = length($seq);
     
     # Run velveth on groups of 2 or more reads using stdout
     if ( scalar(@groups) >= $num_aln ) {
@@ -765,7 +773,6 @@ sub align_groups() {
   
   # Sort the output file
   capture( "sort -k 4,4 -n -o $output_file_sorted $output_file" );
-  print "Done.\n";
 }
 
 
@@ -837,35 +844,35 @@ sub _complement {
 # Note: Also returns 1 for "long-mapping" alignments, in which both mates align independently but do not meet
 # fragment length constraints defined by Bowtie's "--minins" and "--maxins" options
 sub _isHalfMappingMate {
-  my $flags = shift;
+  my $flags = int(shift);
   return ( (($flags & 4) != 0) ^ (($flags & 8) != 0) );
 }
 
 # Returns 1 if the given sum-of-flags value identifies a mate in an aligning read pair, otherwise returns 0
 # Note: Also returns 1 for discordant alignments, which must be suppressed using Bowtie's "--no-discordant" option
 sub _isInMappingPair {
-  my $flags = shift;
+  my $flags = int(shift);
   return ( (($flags & 4) == 0) && (($flags & 8) == 0) );
 }
 
 # Returns 1 if the given sum-of-flags value identifies a mate in a no-alignments read pair, otherwise returns 0
 sub _isInNonMappingPair {
-  my $flags = shift;
+  my $flags = int(shift);
   return ( (($flags & 4) != 0) && (($flags & 8) != 0) );
 }
 
 # Returns 1 if the given sum-of-flags values represent a read pair containing mates that align independently but
 # do not meet fragment length constraints, otherwise returns 0
 sub _isLongMappingPair {
-  my $flags1 = shift;
-  my $flags2 = shift;
+  my $flags1 = int(shift);
+  my $flags2 = int(shift);
   return ( ((($flags1 & 4) == 0) && (($flags1 & 8) != 0))
         && ((($flags2 & 4) == 0) && (($flags2 & 8) != 0)) );
 }
 
 # Returns 1 if the given sum-of-flags value identifies a non-aligning mate, otherwise returns 0
 sub _isUnalignedMate {
-  my $flags = shift;
+  my $flags = int(shift);
   return ( (($flags & 4) != 0) )
 }
 
