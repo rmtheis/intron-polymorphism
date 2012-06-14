@@ -609,11 +609,12 @@ sub filter1 {
            group
  Example : $project->bowtie_identify();
            $project->filter( 8 );
-           $project->assemble_groups( 250, 3, 13 );
+           $project->assemble_groups( 250, 3, 13, 3 );
  Returns : No return value
  Args    : Expected intron length for group identification, Minimum number of unaligned mates
            from half-mapping read pairs needed near one another to consider them to be a group,
-           Velvet coverage cutoff value, path to file containing half-mapping reads (optional)
+           Velvet hash length value, Velvet coverage cutoff value, path to file containing
+           half-mapping reads (optional)
 
 =cut
 
@@ -621,6 +622,7 @@ sub assemble_groups {
   my $self                = shift;
   my $intron_length       = shift;
   my $num_aln             = shift;
+  my $hash_length         = shift;
   my $cov_cutoff          = shift;
   my $halfmap_file        = shift || $self->{"halfmapping_file"};
   my $work_dir            = $self->{"work_dir"};
@@ -691,14 +693,14 @@ sub assemble_groups {
       }
       $ofh->close();
       my $outdir = "$velvet_dir/group_${count}/";
-      capture( "velveth $outdir $cov_cutoff -sam -short $outfile" );
+      capture( "velveth $outdir $hash_length -sam -short $outfile" );
       die "$0: velveth exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Delete the SAM file of read data unless we're debugging
       #unlink( $outfile ) if !DEBUG or die "$0: cannot delete $outfile: $!";
 
       # Run velvetg on groups
-      capture("velvetg $outdir");
+      capture("velvetg $outdir -cov_cutoff $cov_cutoff");
       die "$0: velvetg exited unsuccessful" if ( $EXITVAL != 0 );
       
       # Append results to the multi-FastA output file     
@@ -762,7 +764,7 @@ sub align_groups() {
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
   
   # Sort the output file
-  capture( "sort -k 6,6 -n -r -o $output_file_sorted $output_file" );
+  capture( "sort -k 4,4 -n -o $output_file_sorted $output_file" );
   print "Done.\n";
 }
 

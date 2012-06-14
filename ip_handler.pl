@@ -30,14 +30,14 @@ my $skip_to = "";
 my $scripts_dir = "/home/theis/intron-polymorphism";
 
 # Reference genome filename (FastA format)
-my $ref_genome_file = "/home/theis/intron-polymorphism/testdata/NC_008253.fna";
+my $ref_genome_file = "/home/theis/intron-polymorphism/testdata/MicromonasRCC299v3.fasta";
 
 # Directory where the unmapped reads are located
 my $reads_dir = "/home/theis/intron-polymorphism/testdata";
 
 # Base of the unmapped reads filenames, without "_1.fq" or "_2.fq" extension (FastQ format)
 # This base filename will be used for all data subsequently generated from these reads.
-my $reads_basename = "E100000";
+my $reads_basename = "micromonas6";
 
 # Directory name where the bowtie executables are located
 my $bowtie_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta6";
@@ -49,7 +49,7 @@ my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
 #my $velvet_dir = "/home/theis/intron-polymorphism/velvet";
 
 # Default -I/--minins <int> value for Bowtie
-my $minins = 300;
+my $minins = 10;
 
 # Default -X/--maxins <int> value for Bowtie
 my $maxins = 700;
@@ -58,10 +58,13 @@ my $maxins = 700;
 my $intron_length = 250;
 
 # Default minimum number of nearby half-mapping mates needed to perform local assembly on group
-my $num_aln = 10;
+my $num_aln = 5;
 
-# Default Velvet coverage cutoff
-my $cov_cutoff = 13;
+# Default Velvet coverage cutoff value
+my $cov_cutoff = 3;
+
+# Default Velvet hash length value
+my $hash_length = 13;
 
 # Path to existing SAM data, for restarting run or using existing run data. Leave blank for new run
 my $existing_alignment_file = "";
@@ -82,6 +85,7 @@ GetOptions(
   'c:i' => \$cov_cutoff,                 # Velvet coverage cutoff value
   'g:s' => \$ref_genome_file,            # Path to FastA format reference genome
   'h:s' => \$existing_halfmapping_file,  # Path to SAM format file containing existing half-mapping read pairs
+  'hl:s' => \$hash_length,               # Velvet hash length value
   'k:s' => \$skip_to,                    # Pipeline step to skip ahead to
   'l:i' => \$intron_length,              # Intron length for calculating overlap for mate grouping
   'max:i' => \$maxins,                   # Maximum insert length, used for initial alignment
@@ -145,7 +149,7 @@ $project->filter1();
 
 ASSEMBLY:
 print "Running ASSEMBLY...\n";
-$project->assemble_groups( $intron_length, $num_aln, $cov_cutoff );
+$project->assemble_groups( $intron_length, $num_aln, $hash_length, $cov_cutoff );
 
 ALIGNMENT:
 print "Running ALIGNMENT...\n";
