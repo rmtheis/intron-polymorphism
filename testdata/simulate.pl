@@ -37,6 +37,10 @@ use Math::Random qw(random_normal random_exponential);
 use Getopt::Long;
 use List::Util qw(max min);
 
+use constant SUBSTITUTIONS => (1);
+use constant MICROINDELS => (1);
+use constant LARGER_REARRANGEMENTS => (1);
+
 my @fa_fn = ();        # files with reference FASTA
 my $rf = "";           # reference sequence
 my $long = 0;          # 1 -> generate long reads
@@ -123,74 +127,76 @@ sub rand_dna($) {
 # Mutate the reference
 #
 
-print STDERR "Adding single-base substitutions...\n";
-my $nsnp = 0;
-for(0..length($rf)-1) {
-	if(rand() < 0.0012) {
-		my $oldc = substr($rf, $_, 1);
-		substr($rf, $_, 1) = substr("ACGT", int(rand(4)), 1);
-		$nsnp++ if substr($rf, $_, 1) ne $oldc;
-	}
-}
-
-print STDERR "Adding microindels...\n";
-my $microgap = 0;
-{
-	my $newrf = "";
-	my $nins = int(length($rf) * 0.0005 + 0.5);
-	my $ndel = int(length($rf) * 0.0005 + 0.5);
-	$microgap = $nins + $ndel;
-	my %indel = ();
-	for(1..$nins) {
-		my $off = int(rand(length($rf)));
-		$indel{$off}{ty} = "ins";
-		$indel{$off}{len} = int(random_exponential(1, 3))+1;
-	}
-	for(1..$ndel) {
-		my $off = int(rand(length($rf)));
-		$indel{$off}{ty} = "del";
-		$indel{$off}{len} = int(random_exponential(1, 3))+1;
-	}
-	my $lasti = 0;
-	for my $rfi (sort {$a <=> $b} keys %indel) {
-		if($rfi > $lasti) {
-			$newrf .= substr($rf, $lasti, $rfi - $lasti);
-			$lasti = $rfi;
-		}
-		if($indel{$rfi}{ty} eq "ins") {
-			$newrf .= rand_dna($indel{$rfi}{len});
-		} else {
-			$lasti += $indel{$rfi}{len};
+if (SUBSTITUTIONS) {
+	print STDERR "Adding single-base substitutions...\n";
+	my $nsnp = 0;
+	for(0..length($rf)-1) {
+		if(rand() < 0.0012) {
+			my $oldc = substr($rf, $_, 1);
+			substr($rf, $_, 1) = substr("ACGT", int(rand(4)), 1);
+			$nsnp++ if substr($rf, $_, 1) ne $oldc;
 		}
 	}
-	if($lasti < length($rf)-1) {
-		$newrf .= substr($rf, $lasti, length($rf) - $lasti - 1);
+  print STDERR "Added $nsnp SNPs\n";
+}
+if (MICROINDELS) {
+	print STDERR "Adding microindels...\n";
+	my $microgap = 0;
+	{
+		my $newrf = "";
+		my $nins = int(length($rf) * 0.0005 + 0.5);
+		my $ndel = int(length($rf) * 0.0005 + 0.5);
+		$microgap = $nins + $ndel;
+		my %indel = ();
+		for(1..$nins) {
+			my $off = int(rand(length($rf)));
+			$indel{$off}{ty} = "ins";
+			$indel{$off}{len} = int(random_exponential(1, 3))+1;
+		}
+		for(1..$ndel) {
+			my $off = int(rand(length($rf)));
+			$indel{$off}{ty} = "del";
+			$indel{$off}{len} = int(random_exponential(1, 3))+1;
+		}
+		my $lasti = 0;
+		for my $rfi (sort {$a <=> $b} keys %indel) {
+			if($rfi > $lasti) {
+				$newrf .= substr($rf, $lasti, $rfi - $lasti);
+				$lasti = $rfi;
+			}
+			if($indel{$rfi}{ty} eq "ins") {
+				$newrf .= rand_dna($indel{$rfi}{len});
+			} else {
+				$lasti += $indel{$rfi}{len};
+			}
+		}
+		if($lasti < length($rf)-1) {
+			$newrf .= substr($rf, $lasti, length($rf) - $lasti - 1);
+		}
+		$rf = $newrf;
 	}
-	$rf = $newrf;
+  print STDERR "Added $microgap Microindels\n";
 }
-
-print STDERR "Adding larger rearrangements...\n";
-my $nrearr = int(random_exponential(1, 3)+1);
-for(0..$nrearr) {
-	my $break = int(rand(length($rf)));
-	my $before = substr($rf, 0, $break);
-	my $after = substr($rf, $break);
-	$after = revcomp($after) if int(rand()) == 0;
-	$rf = $after.$before;
+if (LARGER_REARRANGEMENTS) {
+	print STDERR "Adding larger rearrangements...\n";
+	my $nrearr = int(random_exponential(1, 3)+1);
+	for(0..$nrearr) {
+		my $break = int(rand(length($rf)));
+		my $before = substr($rf, 0, $break);
+		my $after = substr($rf, $break);
+		$after = revcomp($after) if int(rand()) == 0;
+		$rf = $after.$before;
+	}
+  print STDERR "Added $nrearr Rearrangements\n";
 }
-
-print STDERR "Added $nsnp SNPs\n";
-print STDERR "Added $microgap Microindels\n";
-print STDERR "Added $nrearr Rearrangements\n";
 
 # Save the mutated reference
-open(RD, ">${prefix}_mutated_sequence.fa") || die;
-print RD ">Sequence_from_${prefix}-mutated_by_simulate.pl\n";
+open(RD, ">${prefix}_derived_sequence.fa") || die;
+print RD ">Sequence_derived_from_${prefix}\n";
 for ( my $pos = 0; $pos < length($rf); $pos += 70 ) {
   print RD substr($rf, $pos, 70), "\n";
 }
 close(RD);
-
 
 #
 # Simulate reads
