@@ -37,9 +37,11 @@ use Math::Random qw(random_normal random_exponential);
 use Getopt::Long;
 use List::Util qw(max min);
 
-use constant SUBSTITUTIONS => (1);
-use constant MICROINDELS => (1);
-use constant LARGER_REARRANGEMENTS => (1);
+use constant SUBSTITUTIONS => (0);
+use constant MICROINDELS => (0);
+use constant LARGER_REARRANGEMENTS => (0);
+use constant DELETIONS => (1);
+use constant SEQ_ERRS => (0);
 
 my @fa_fn = ();        # files with reference FASTA
 my $rf = "";           # reference sequence
@@ -180,7 +182,7 @@ if (MICROINDELS) {
 if (LARGER_REARRANGEMENTS) {
 	print STDERR "Adding larger rearrangements...\n";
 	my $nrearr = int(random_exponential(1, 3)+1);
-	for(0..$nrearr) {
+	for(1..$nrearr) {
 		my $break = int(rand(length($rf)));
 		my $before = substr($rf, 0, $break);
 		my $after = substr($rf, $break);
@@ -188,6 +190,17 @@ if (LARGER_REARRANGEMENTS) {
 		$rf = $after.$before;
 	}
   print STDERR "Added $nrearr Rearrangements\n";
+}
+if (DELETIONS) {
+  print STDERR "Adding deletions...\n";
+	my $ndel = int(random_exponential(1, 3)+1);
+	for(1..$ndel) {
+		my $break = int(rand(0.8 * length($rf)));
+		my $size = int(rand(0.1 * length($rf)));
+		$rf = substr($rf, 0, $break).substr($rf, ($break + $size));
+		print "Added deletion from $break to " . ($break + $size) . "\n";
+	}
+  print STDERR "Added $ndel Deletions\n";	
 }
 
 # Save the mutated reference
@@ -230,22 +243,24 @@ sub rand_quals($) {
 	return $ret;
 }
 
-sub add_seq_errs($$) {
-	my($rd, $qu) = @_;
-	my $origLen = length($rd);
-	for(0..length($rd)-1) {
-		my $c = substr($rd, $_, 1);
-		my $q = substr($qu, $_, 1);
-		$q = ord($q)-33;
-		my $p = 10 ** (-0.1 * $q);
-		if(rand() < $p) {
-			$c = substr("ACGTNNNNNN", int(rand(10)), 1);
+if (SEQ_ERRS) {
+	sub add_seq_errs($$) {
+		my($rd, $qu) = @_;
+		my $origLen = length($rd);
+		for(0..length($rd)-1) {
+			my $c = substr($rd, $_, 1);
+			my $q = substr($qu, $_, 1);
+			$q = ord($q)-33;
+			my $p = 10 ** (-0.1 * $q);
+			if(rand() < $p) {
+				$c = substr("ACGTNNNNNN", int(rand(10)), 1);
+			}
+			substr($rd, $_, 1) = $c;
+			substr($qu, $_, 1) = $q;
 		}
-		substr($rd, $_, 1) = $c;
-		substr($qu, $_, 1) = $q;
+		length($rd) == $origLen || die;
+		return $rd;
 	}
-	length($rd) == $origLen || die;
-	return $rd;
 }
 
 # Now simulate 
