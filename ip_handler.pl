@@ -30,14 +30,14 @@ my $skip_to = "";
 my $scripts_dir = "/home/theis/intron-polymorphism";
 
 # Reference genome filename (FastA format)
-my $ref_genome_file = "/home/theis/intron-polymorphism/testdata/MicromonasRCC299v3.fasta";
+my $ref_genome_file = "/home/theis/intron-polymorphism/testdata/m_chr1.fa";
 
 # Directory where the unmapped reads are located
 my $reads_dir = "/home/theis/intron-polymorphism/testdata";
 
 # Base of the unmapped reads filenames, without "_1.fq" or "_2.fq" extension (FastQ format)
 # This base filename will be used for all data subsequently generated from these reads.
-my $reads_basename = "micromonas6";
+my $reads_basename = "m_chr1_5";
 
 # Directory name where the bowtie executables are located
 my $bowtie_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta6";
@@ -58,10 +58,10 @@ my $maxins = 700;
 my $intron_length = 250;
 
 # Default minimum number of nearby half-mapping mates needed to perform local assembly on group
-my $num_aln = 5;
+my $num_aln = 3;
 
 # Default Velvet coverage cutoff value
-my $cov_cutoff = 3;
+my $cov_cutoff = 5;
 
 # Default Velvet hash length value
 my $hash_length = 13;
@@ -97,7 +97,7 @@ GetOptions(
 
 # Check for invalid input
 if ($reads_basename eq "") {
-  print "Error: reads_basename not initialized. Set a value for reads_basename.\n";
+  die "Error: reads_basename not initialized. Set a value for reads_basename.\n";
 }
 
 # Initialize the project
