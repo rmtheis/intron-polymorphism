@@ -24,7 +24,7 @@ use IO::File;
 
 unless ( @ARGV ) {
   print "Usage: $0 -i input_file {-m}\n";
-  die;
+  exit;
 }
 my $infile;
 my $median;
