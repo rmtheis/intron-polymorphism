@@ -39,7 +39,7 @@ my %fragments = ();
 while ( my $line1 = $ifh->getline ) {
   next if $line1 =~ m/^@/;
   my @fields = split(/\t/, $line1);
-  my ($name1, $chr1, $frag1) = ($fields[0], $fields[2], $fields[8]);
+  my ($chr1, $frag1) = ($fields[2], $fields[8]);
   next if ( ($chr1 eq "*") || ($frag1 == 0) );
 
   # Get the second alignment in the pair
