@@ -42,6 +42,7 @@ use constant MICROINDELS => (0);
 use constant LARGER_REARRANGEMENTS => (0);
 use constant DELETIONS => (1);
 use constant SEQ_ERRS => (0);
+use constant RAND_QUALS => (0);
 
 my @fa_fn = ();        # files with reference FASTA
 my $rf = "";           # reference sequence
@@ -235,10 +236,16 @@ if($paired) {
 
 sub rand_quals($) {
 	my $ret = "";
-	my $upper = (rand() < 0.2 ? 11 : 40);
-	$upper = 4 if rand() < 0.02;
-	for(1..$_[0]) {
-		$ret .= chr(33+int(rand($upper)));
+	if (RAND_QUALS) {
+		my $upper = (rand() < 0.2 ? 11 : 40);
+		$upper = 4 if rand() < 0.02;
+		for(1..$_[0]) {
+			$ret .= chr(33+int(rand($upper)));
+		}
+	} else {
+		for (1..$_[0]) {
+			$ret .= "h";
+		}
 	}
 	return $ret;
 }
