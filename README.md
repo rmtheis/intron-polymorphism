@@ -1,42 +1,40 @@
-#intron-polymorphism
+# intron-polymorphism #
 * * *
-
-##INTRODUCTION##
 
 This project is under construction--please do not try to use it until it is finished!
 
-##EXTERNAL DEPENDENCIES##
+## INSTALLATION ##
+**_Linux (64-bit)_**
+
+Install required Perl modules:
+
+    cpan IPC::System::Simple
+    cpan Sys::CPU
+
+Install project code:
+
+    git clone git://github.com/rmtheis/intron-polymorphism.git intron-poly
+
+## EXTERNAL DEPENDENCIES ##
 
 * [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
 * [Velvet](http://http://www.ebi.ac.uk/~zerbino/velvet/)
 
-##INSTALLATION##
-**_Linux (64-bit)_**
-
-#### 1. Install Bowtie 2
-
-Download [here](http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-beta6/bowtie2-2.0.0-beta6-linux-x86_64.zip)
-
-or
+#### Installing Bowtie 2 ####
 
     wget http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-beta6/bowtie2-2.0.0-beta6-linux-x86_64.zip
     unzip bowtie2-2.0.0-beta6-linux-x86_64.zip
 
-#### 2. Install Velvet
+or
+
+Download [here](http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-beta6/bowtie2-2.0.0-beta6-linux-x86_64.zip)
+
+#### Installing Velvet ####
 
     git clone git://github.com/dzerbino/velvet.git velvet
     git checkout aeb11f8058e4ea794a6ec425c168ffcbbfd1bbbc
     cd velvet
     make
-
-#### 3. Install required Perl modules
-
-    cpan IPC::System::Simple
-    cpan Sys::CPU
-
-#### 4. Install this project
-
-    git clone git://github.com/rmtheis/intron-polymorphism.git intron-poly
 
 ##RUNNING##
 
@@ -51,4 +49,4 @@ or
 
 ##LICENSE##
 
-Apache 2.0
+[Apache 2.0](http://www.apache.org/licenses/LICENSE-2.0.html)
