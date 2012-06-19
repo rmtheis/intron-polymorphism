@@ -19,7 +19,7 @@ use Getopt::Long;
 use IO::File;
 
 #
-# Infers fragment length by building a distribution from uniquely aligning mates.
+# Infers fragment length by building a distribution from alignments in a SAM file.
 #
 
 unless ( @ARGV ) {
@@ -29,7 +29,7 @@ unless ( @ARGV ) {
 my $infile;
 my $median;
 GetOptions(
-  'i:s' => \$infile, # SAM format input file to use for inferring fragment length
+  'i:s' => \$infile, # SAM input file
   'm' => \$median # Optional flag for reporting only median fragment length. Default: binned output
 ) || die "$0: Bad option";
 
