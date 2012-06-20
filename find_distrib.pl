@@ -14,8 +14,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-use lib '..';
 use IntronPoly;
+use lib '..';
 use strict;
 use Getopt::Long;
 use IO::File;
@@ -53,10 +53,6 @@ while ( my $line1 = $ifh->getline ) {
   next if (IntronPoly::_isSecondaryAlignment($flags2) != 0);
   next if (IntronPoly::_isFarMappingPair($flags1, $flags2) != 0);
   if (IntronPoly::_isHalfMappingMate($flags2) != 0) {
-    print "HALF-MAPPING READ PAIR:\n";
-    print $line1;
-    print $line2;
-    
     # Round to nearest bin
     my $frag = int( ($pos + ($bin_size / 2)) / $bin_size );
     $fragments{$frag}++;
