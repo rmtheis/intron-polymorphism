@@ -632,7 +632,8 @@ sub assemble_groups {
   my $work_dir            = $self->{"work_dir"};
   my $reads_basename      = $self->{"reads_basename"};
   my $frag_length         = $self->{"frag_length"};
-  my $sorted_file         = "${halfmap_file}_sorted.sam";
+  my $sorted_file         = $halfmap_file;
+  $sorted_file            =~ s/(\.[^.]+)$/_sorted.sam/;
   my $velvet_dir          = "$work_dir/velvet-data";
   my $results_file        = "$work_dir/${reads_basename}_all_contigs.fa";
   $self->{"contigs_file"} = $results_file;
