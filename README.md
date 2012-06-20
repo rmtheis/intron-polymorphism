@@ -13,27 +13,19 @@ Install required Perl modules:
 
 Install project code:
 
-    git clone git://github.com/rmtheis/intron-polymorphism.git intron-poly
+    git clone git://github.com/rmtheis/intron-polymorphism.git
 
 ## EXTERNAL DEPENDENCIES
 
-#### Installing [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
+1. [Blast](http://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Web&PAGE_TYPE=BlastDocs&DOC_TYPE=Download)
 
-    wget http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-beta6/bowtie2-2.0.0-beta6-linux-x86_64.zip
-    unzip bowtie2-2.0.0-beta6-linux-x86_64.zip
+2. [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
 
-or Download [here](http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.0.0-beta6/bowtie2-2.0.0-beta6-linux-x86_64.zip)
-
-#### Installing [Velvet](http://http://www.ebi.ac.uk/~zerbino/velvet/)
-
-    git clone git://github.com/dzerbino/velvet.git velvet
-    git checkout aeb11f8058e4ea794a6ec425c168ffcbbfd1bbbc
-    cd velvet
-    make
+3. [Velvet](http://www.ebi.ac.uk/~zerbino/velvet/)
 
 ## RUNNING
 
-    cd intron-poly
+    cd intron-polymorphism
     ./ip_handler.pl
 
 ## LICENSE
