@@ -280,6 +280,7 @@ sub bowtie_identify {
   my $work_dir                = $self->{"work_dir"};
   my $outfile                 = "$work_dir/${reads_basename}_halfmapping.sam";
   my $outfile2                = "$work_dir/${reads_basename}_multmapping.sam";
+  my $outfile3                = "$work_dir/${reads_basename}_halfmapping_sorted.sam";
   $self->{"halfmapping_file"} = $outfile;
   $self->{"multmapping_file"} = $outfile2;
   print "Identifying half-mapping read pairs...\n";
@@ -385,6 +386,9 @@ sub bowtie_identify {
   $ofh->close;
   $ofh2->close;
   print "Saved half-mapping read pairs data to $outfile\n";
+  print "Sorting...\n";
+  capture( "sort -k3,3 -k8n,8 -o $outfile3 $outfile" );
+  die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
 }
 
 =head2 create_fake_pairs
