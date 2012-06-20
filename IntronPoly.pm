@@ -76,10 +76,10 @@ sub set_work_dir {
   }
   $self->{"work_dir"} = $work_dir;
 
-  my $velvet_dir = "$work_dir/velvet-data";
-  unless ( -d $velvet_dir ) {
-    &_make_dir($velvet_dir);
-    print "Created velvet directory $velvet_dir\n";
+  my $velvet_data_dir = "$work_dir/velvet-data";
+  unless ( -d $velvet_data_dir ) {
+    &_make_dir($velvet_data_dir);
+    print "Created velvet directory $velvet_data_dir\n";
   }
   return $work_dir;
 }
@@ -139,6 +139,7 @@ sub mapping_setup {
   my $bowtie_index_dir     = shift;
   my $reads_dir            = shift;
   my $reads_basename       = shift;
+  my $velvet_dir           = shift;
   my $scripts_dir          = $self->{"scripts_dir"};
   my $work_dir             = $self->{"work_dir"};
   my $ref_genome           = $self->{"ref_genome"}->{"full_pathname"};
@@ -167,13 +168,14 @@ sub mapping_setup {
     &_make_dir($bowtie_index_dir);
   }
 
-  # Remember paths needed for running Bowtie
+  # Remember paths needed for running
   $self->{"bowtie_db"} = {
     bowtie_dir       => $bowtie_dir,
     bowtie_index_dir => $bowtie_index_dir,
     reads_file_one   => $reads_file_one,
     reads_file_two   => $reads_file_two
   };
+  $self->{"velvet_dir"} = $velvet_dir;
   print "Using reference genome $ref_genome\n";
   print "Using reads file 1: $reads_file_one\n";
   print "Using reads file 2: $reads_file_two\n";
@@ -245,9 +247,13 @@ sub run_bowtie_mapping {
   $self->{"alignment_file"} = $output_file;
   print "Running mapping using Bowtie, using $num_threads threads...\n";
 
+  if ($bowtie_dir ne "") {
+    $bowtie_dir =~ s!/*$!/!; # Add trailing slash if not already present
+  }
+  
   # Call bowtie to run the mapping
   capture(
-        "$bowtie_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
+        "${bowtie_dir}bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --no-hd "
       . "--maxins $maxins --minins $minins "
       . "--no-discordant "
@@ -289,6 +295,10 @@ sub bowtie_identify {
 # capture( "cut -f 1,2,4,10,11 $alignment_file " .
 #        "> $work_dir/${reads_basename}_alignment_pruned" );
 # die "$0: cut exited unsuccessful" if( $EXITVAL != 0 );
+
+  if ($scripts_dir ne "") {
+    $scripts_dir =~ s!/*$!/!; # Add trailing slash if not already present
+  }
 
   # Determine length of read pair for use in filtering and grouping steps
   $self->{"frag_length"} = &_compute_frag_length( $scripts_dir, $alignment_file );
@@ -500,9 +510,13 @@ sub run_fake_pairs_alignment {
   $self->{"realignment_file"} = $outfile;
   print "Aligning simulated paired-end reads...\n";
 
+  if ($bowtie_dir ne "") {
+    $bowtie_dir =~ s!/*$!/!; # Add trailing slash if not already present
+  }
+  
   # Run Bowtie with the fake read pairs as input
   capture(
-        "$bowtie_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
+        "${bowtie_dir}bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --no-hd "
       . "--no-mixed --no-discordant --no-contain --no-overlap "
       . "-1 $pairs_file_1 -2 $pairs_file_2 "
@@ -531,15 +545,12 @@ sub filter1 {
   my $infile              = shift || $self->{"halfmapping_file"};
   my $work_dir            = $self->{"work_dir"};
   my $reads_basename      = $self->{"reads_basename"};
-  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
-  my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   my $frag_length         = $self->{"frag_length"};
   my $debug_file          = "$work_dir/${reads_basename}_fake_pairs_alignment.debug" if DEBUG;
   my $outfile             = "$work_dir/${reads_basename}_filtered1.sam";
 
   # Save the filtered results in the place of the half-mapping alignment file
-  $self->{"halfmapping_file"}  = $outfile;
+  $self->{"halfmapping_file"} = $outfile;
 
   print "Filtering alignments...\n";
 
@@ -630,15 +641,20 @@ sub assemble_groups {
   my $cov_cutoff          = shift;
   my $halfmap_file        = shift || $self->{"halfmapping_file"};
   my $work_dir            = $self->{"work_dir"};
+  my $velvet_dir          = $self->{"velvet_dir"};
   my $reads_basename      = $self->{"reads_basename"};
   my $frag_length         = $self->{"frag_length"};
   my $sorted_file         = $halfmap_file;
   $sorted_file            =~ s/(\.[^.]+)$/_sorted.sam/;
-  my $velvet_dir          = "$work_dir/velvet-data";
+  my $velvet_data_dir     = "$work_dir/velvet-data";
   my $results_file        = "$work_dir/${reads_basename}_all_contigs.fa";
   $self->{"contigs_file"} = $results_file;
   print "Performing local assemblies...\n";
 
+  if ($velvet_dir ne "") {
+    $velvet_dir =~ s!/*$!/!; # Add trailing slash if not already present
+  }
+  
   # Sort by alignment position
   capture( "sort -k3,3 -k8n,8 -o $sorted_file $halfmap_file" );
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
@@ -705,15 +721,15 @@ sub assemble_groups {
         print $ofh shift(@groups);
       }
       $ofh->close();
-      my $outdir = "$velvet_dir/group_${count}/";
-      capture( "velveth $outdir $hash_length -sam -short $outfile" );
+      my $outdir = "$velvet_data_dir/group_${count}/";
+      capture( "${velvet_dir}velveth $outdir $hash_length -sam -short $outfile" );
       die "$0: velveth exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Delete the SAM file of read data unless we're debugging
       #unlink( $outfile ) if !DEBUG or die "$0: cannot delete $outfile: $!";
 
       # Run velvetg on groups
-      capture("velvetg $outdir -cov_cutoff $cov_cutoff");
+      capture("${velvet_dir}velvetg $outdir -cov_cutoff $cov_cutoff");
       die "$0: velvetg exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Append results to the multi-FastA output file
@@ -766,9 +782,13 @@ sub align_groups() {
   $self->{"contigs_alignment_file"} = $output_file;
   print "Aligning assembled contigs to reference genome...\n";
 
+  if ($bowtie_dir ne "") {
+    $bowtie_dir =~ s!/*$!/!; # Add trailing slash if not already present
+  }
+  
   # Call bowtie to run the mapping
   capture(
-        "$bowtie_dir/bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
+        "${bowtie_dir}bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --no-hd "
       . "-U $contigs_file -f "
       . "--no-unal "
@@ -789,7 +809,7 @@ sub _compute_frag_length {
   my $alignment_file = shift;
   print "Determining fragment length...\n";
   # Determine length of read pair for use in filtering and grouping steps
-  my $frag_length = capture("$scripts_dir/infer_fraglen.pl -i $alignment_file -m");
+  my $frag_length = capture("${scripts_dir}infer_fraglen.pl -i $alignment_file -m");
   die "$0: infer_fraglen.pl exited unsuccessful" if ( $EXITVAL !=0 );
   return $frag_length;
 }

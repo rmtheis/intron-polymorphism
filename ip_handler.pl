@@ -15,95 +15,79 @@
 #  limitations under the License.
 
 use strict;
+use FindBin;
 use IntronPoly;
 use Getopt::Long;
 use Sys::CPU;
 
-##########################################
-# CONFIGURE DEFAULT USER RUNTIME OPTIONS #
-##########################################
+##################################
+# CONFIGURE USER RUNTIME OPTIONS #
+##################################
 
-# Skip ahead to a step in the pipeline
-my $skip_to = "";
-
-# Directory name where this script and associated scripts are located
-my $scripts_dir = "/home/theis/intron-polymorphism";
-
-# Reference genome filename (FastA format)
-my $ref_genome_file = "/home/theis/intron-polymorphism/testdata/m_chr1.fa";
-
-# Directory where the unmapped reads are located
-my $reads_dir = "/home/theis/intron-polymorphism/testdata";
-
-# Base of the unmapped reads filenames, without "_1.fq" or "_2.fq" extension (FastQ format)
-# This base filename will be used for all data subsequently generated from these reads.
-my $reads_basename = "m_chr1_5";
-
-# Directory name where the bowtie executables are located
-my $bowtie_dir = "/home/theis/intron-polymorphism/bowtie2-2.0.0-beta6";
-
-# Directory name where existing bowtie index files may be located
-my $bowtie_index_dir = "/home/theis/intron-polymorphism/bowtie-index";
-
-# Directory name where the Velvet executable is located
-#my $velvet_dir = "/home/theis/intron-polymorphism/velvet";
-
-# Default -I/--minins <int> value for Bowtie
-my $minins = 10;
-
-# Default -X/--maxins <int> value for Bowtie
-my $maxins = 700;
-
-# Default expected intron length for assembly
-my $intron_length = 250;
-
-# Default minimum number of nearby half-mapping mates needed to perform local assembly on group
-my $num_aln = 3;
-
-# Default Velvet coverage cutoff value
-my $cov_cutoff = 5;
-
-# Default Velvet hash length value
-my $hash_length = 13;
-
-# Path to existing SAM data, for restarting run or using existing run data. Leave blank for new run
-my $existing_alignment_file = "";
-my $existing_halfmapping_file = "";
-
+my $ref_genome_file = undef;            # Reference genome (FastA format)
+my $reads_dir = undef;                  # Directory containing read pairs
+my $reads_basename = undef;             # Read pairs base name, without "_1.fq" or "_2.fq" extension (FastQ format)
+my $bowtie_dir = undef;                 # Directory to Bowtie executable, if not in $PATH
+my $velvet_dir = undef;                 # Directory to Velvet executable, if not in $PATH
+my $minins = undef;                     # Bowtie -I/--minins <int> value
+my $maxins = undef;                     # Bowtie -X/--maxins <int> value
+my $intron_length = undef;              # Expected intron length for assembly
+my $num_aln = undef;                    # Minimum number of nearby half-mapping mates for local assembly
+my $cov_cutoff = undef;                 # Velvet coverage cutoff
+my $hash_length = undef;                # Velvet hash length
+my $bowtie_index_dir = undef;           # Directory to existing Bowtie index
+my $existing_alignment_file = undef;    # Path to existing SAM data. Leave as undef for new run
+my $existing_halfmapping_file = undef;  # Path to existing SAM data. Leave as undef for new run
+my $skip_to = undef;                    # Pipeline step to skip ahead to
+my $bowtie_num_threads = undef;         # Number of Bowtie parallel search threads
 
 ###########################
 # INITIALIZE THE PIPELINE #
 ###########################
 
-# Set default number of threads to number of available cores
-my $bowtie_num_threads = Sys::CPU::cpu_count();
-
-# Parse command-line options, overriding any default options set above
+# Parse command-line options, overriding any options set above
 GetOptions(
-  'a:s' => \$existing_alignment_file,    # Path to SAM format file containing existing read alignment data
-  'b:s' => \$reads_basename,             # Base of the read pairs filename, not including its extension
-  'c:i' => \$cov_cutoff,                 # Velvet coverage cutoff value
-  'g:s' => \$ref_genome_file,            # Path to FastA format reference genome
-  'h:s' => \$existing_halfmapping_file,  # Path to SAM format file containing existing half-mapping read pairs
-  'hl:s' => \$hash_length,               # Velvet hash length value
-  'k:s' => \$skip_to,                    # Pipeline step to skip ahead to
-  'l:i' => \$intron_length,              # Intron length for calculating overlap for mate grouping
-  'max:i' => \$maxins,                   # Maximum insert length, used for initial alignment
-  'min:i' => \$minins,                   # Minimum insert length, used for initial alignment
-  'n:i' => \$num_aln,                    # Minimum number of alignments per group
-  'rd:s' => \$reads_dir,                 # Directory containing the FastQ format read pairs files
-  't:s' => \$bowtie_num_threads,         # Number of threads to use for running Bowtie
+  'a:s' => \$existing_alignment_file,
+  'b:s' => \$reads_basename,
+  'bw:s' => \$bowtie_dir,
+  'c:i' => \$cov_cutoff,
+  'g:s' => \$ref_genome_file,
+  'h:s' => \$existing_halfmapping_file,
+  'hl:s' => \$hash_length,
+  'idx:s' => \$bowtie_index_dir,
+  'k:s' => \$skip_to,
+  'l:i' => \$intron_length,
+  'max:i' => \$maxins,
+  'min:i' => \$minins,
+  'n:i' => \$num_aln,
+  'rd:s' => \$reads_dir,
+  't:s' => \$bowtie_num_threads,
+  'v:s' => \$velvet_dir,
 ) || die "$0: Bad option";
 
-# Check for invalid input
-if ($reads_basename eq "") {
-  die "Error: reads_basename not initialized. Set a value for reads_basename.\n";
-}
+# Use defaults for undefined values
+$ref_genome_file = $ref_genome_file || $ENV{HOME} . "/intron-polymorphism/testdata/m_chr1.fa";
+$reads_dir = $reads_dir || $ENV{HOME} . "/intron-polymorphism/testdata";
+$reads_basename = $reads_basename || "m_chr1_6";
+$bowtie_dir = $bowtie_dir || "";
+$velvet_dir = $velvet_dir || "";
+$minins = $minins || 10;
+$maxins = $maxins || 700;
+$intron_length = $intron_length || 250;
+$num_aln = $num_aln || 3;
+$cov_cutoff = $cov_cutoff || 5;
+$hash_length = $hash_length || 13;
+$bowtie_index_dir = $bowtie_index_dir || $ENV{HOME} . "/intron-polymorphism/bowtie-index";
+$existing_alignment_file = $existing_alignment_file || "";
+$existing_halfmapping_file = $existing_halfmapping_file || "";
+$skip_to = $skip_to || "";
+$bowtie_num_threads = $bowtie_num_threads || Sys::CPU::cpu_count();
 
 # Initialize the project
 my $project = IntronPoly->new();
 
 # Create output directory
+my $scripts_dir = $FindBin::Bin;
 my $work_dir = $project->set_work_dir( $scripts_dir );
 
 # Set paths to data used throughout pipeline
@@ -133,6 +117,7 @@ $project->mapping_setup(
   $bowtie_index_dir,
   $reads_dir,
   $reads_basename,
+  $velvet_dir,
 );
 $project->build_bowtie_index();
 $project->run_bowtie_mapping( $bowtie_num_threads, $minins, $maxins );
