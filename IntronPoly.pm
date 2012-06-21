@@ -289,7 +289,11 @@ sub bowtie_identify {
   my $outfile3                = "$work_dir/${reads_basename}_halfmapping_sorted.sam";
   $self->{"halfmapping_file"} = $outfile;
   $self->{"multmapping_file"} = $outfile2;
-  print "Identifying half-mapping read pairs...\n";
+  
+  if (!-e $alignment_file) {
+    print STDERR "Alignment file not found.\n";
+    return;
+  }
 
 # # Remove all rows we're not interested in now
 # capture( "cut -f 1,2,4,10,11 $alignment_file " .
@@ -301,8 +305,11 @@ sub bowtie_identify {
   }
 
   # Determine length of read pair for use in filtering and grouping steps
+  print "Determining fragment length...\n";
   $self->{"frag_length"} = &_compute_frag_length( $scripts_dir, $alignment_file );
 
+  print "Identifying half-mapping read pairs...\n";
+  
   my $ifh  = IO::File->new( $alignment_file, 'r' ) or die "Can't open $alignment_file: $!";
   my $ofh  = IO::File->new( $outfile, 'w' ) or die "Can't create $outfile: $!";
   my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "Can't create $outfile2: $!";
@@ -310,7 +317,7 @@ sub bowtie_identify {
   my $discard_this_id = 0;
   my $mapping         = 0;
   my @print_lines = ();
-
+  my $count = 0;
   while ( my $line = $ifh->getline ) {
     next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
@@ -332,7 +339,7 @@ sub bowtie_identify {
 
         # Print the half-mapping mate pairs with the last line's ID
         print $ofh "$line1$line2";
-
+        $count++;
       }
       elsif ( scalar @print_lines == 3 && $prev_id ne "" ) {
 
@@ -395,7 +402,11 @@ sub bowtie_identify {
   $ifh->close;
   $ofh->close;
   $ofh2->close;
-  print "Saved half-mapping read pairs data to $outfile\n";
+  if ($count == 0) {
+    print STDERR "No half-mapping read pairs found.\n";
+    return;
+  }
+  print "Saved $count half-mapping read pair alignments to $outfile\n";
   print "Sorting...\n";
   capture( "sort -k3,3 -k8n,8 -o $outfile3 $outfile" );
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
@@ -428,6 +439,8 @@ sub create_fake_pairs {
   my $outfile2       = "$work_dir/${reads_basename}_fake_pairs_2.fq";
   $self->{"fake_pairs_file_1"} = $outfile1;
   $self->{"fake_pairs_file_2"} = $outfile2;
+  
+  return if (-z $infile || !(-e $infile));
   print "Creating simulated paired-end reads...\n";
 
   # Define length of each mate for the fake read pairs
@@ -477,11 +490,7 @@ sub create_fake_pairs {
   $ofh1->close;
   $ofh2->close;
 
-  # Define the maximum/minimum insert length as read length +/- 10
-  if ( !$have_candidates ) {
-    print STDERR "$0: filter(): No half-mapping pairs available.\n";
-    return 1;
-  }
+  print STDERR "No half-mapping read pairs found.\n" if ( !$have_candidates );
 }
 
 =head2 run_fake_pairs_alignment
@@ -508,6 +517,9 @@ sub run_fake_pairs_alignment {
   my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
   my $outfile             = "$work_dir/${reads_basename}_fake_pairs_alignment.sam";
   $self->{"realignment_file"} = $outfile;
+  
+  return if (-z $pairs_file_1 || !(-e $pairs_file_1));
+  
   print "Aligning simulated paired-end reads...\n";
 
   if ($bowtie_dir ne "") {
@@ -552,6 +564,8 @@ sub filter1 {
   # Save the filtered results in the place of the half-mapping alignment file
   $self->{"halfmapping_file"} = $outfile;
 
+  return if (-z $realignment_file || !(-e $realignment_file));
+  
   print "Filtering alignments...\n";
 
   my $ifh1 = IO::File->new( $realignment_file, 'r' ) or die "$0: Can't open $realignment_file: $!";
@@ -649,6 +663,8 @@ sub assemble_groups {
   my $velvet_data_dir     = "$work_dir/velvet-data";
   my $results_file        = "$work_dir/${reads_basename}_all_contigs.fa";
   $self->{"contigs_file"} = $results_file;
+  
+  return if (-z $halfmap_file || !(-e $halfmap_file));
   print "Performing local assemblies...\n";
 
   if ($velvet_dir ne "") {
@@ -668,6 +684,7 @@ sub assemble_groups {
   my $last_len = 0;
   my $overlap_dist;
   my $count = 0;
+  my $num_met_cutoff = 0;
   my $new_group = 1;
   my $left_pos = 0;
   while ( my $line = $ifh->getline ) {
@@ -732,16 +749,19 @@ sub assemble_groups {
       capture("${velvet_dir}velvetg $outdir -cov_cutoff $cov_cutoff");
       die "$0: velvetg exited unsuccessful" if ( $EXITVAL != 0 );
 
-      # Append results to the multi-FastA output file
-      my $ifh2 = IO::File->new( "$outdir/contigs.fa", 'r' ) or die "$0: $outdir/contigs.fa: $!";
-      while ( my $contig_line = $ifh2->getline ) {
-        if ($contig_line =~ m/^>/) {
-          print $ofh2 ">Group_${count}_(${left_pos}-${last_pos})_" . substr($contig_line, 1);
-        } else {
-          print $ofh2 $contig_line;
+      if (!(-z "$outdir/contigs.fa")) {
+        # Append results to the multi-FastA output file
+        $num_met_cutoff++;
+        my $ifh2 = IO::File->new( "$outdir/contigs.fa", 'r' ) or die "$0: $outdir/contigs.fa: $!";
+        while ( my $contig_line = $ifh2->getline ) {
+          if ($contig_line =~ m/^>/) {
+            print $ofh2 ">Group_${count}_(${left_pos}-${last_pos})_" . substr($contig_line, 1);
+          } else {
+            print $ofh2 $contig_line;
+          }
         }
+        $ifh2->close;
       }
-      $ifh2->close;
     }
     else {
       @groups = ();
@@ -750,6 +770,8 @@ sub assemble_groups {
   }
   $ifh->close;
   $ofh2->close;
+  print "Identified $count groups for assembly.\n";
+  print "Assembled $num_met_cutoff contigs meeting coverage cutoff.\n";
 }
 
 =head2 align_groups
@@ -780,8 +802,10 @@ sub align_groups() {
   my $output_file                   = "$work_dir/${reads_basename}_contigs_alignment.sam";
   my $output_file_sorted            = "$work_dir/${reads_basename}_contigs_alignment_sorted.sam";
   $self->{"contigs_alignment_file"} = $output_file;
-  print "Aligning assembled contigs to reference genome...\n";
 
+  return if (-z $contigs_file || !(-e $contigs_file));
+  print "Aligning assembled contigs to reference genome...\n";
+  
   if ($bowtie_dir ne "") {
     $bowtie_dir =~ s!/*$!/!; # Add trailing slash if not already present
   }
@@ -807,7 +831,6 @@ sub align_groups() {
 sub _compute_frag_length {
   my $scripts_dir    = shift;
   my $alignment_file = shift;
-  print "Determining fragment length...\n";
   # Determine length of read pair for use in filtering and grouping steps
   my $frag_length = capture("${scripts_dir}infer_fraglen.pl -i $alignment_file -m");
   die "$0: infer_fraglen.pl exited unsuccessful" if ( $EXITVAL !=0 );
