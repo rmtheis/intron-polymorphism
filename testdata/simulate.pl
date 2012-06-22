@@ -212,7 +212,7 @@ if (INSERTIONS) {
 		my $copystart = int(rand(0.8 * length($rf)));
 		my $size = int(rand(0.1 * length($rf)));
 		my $break = int(rand(0.8 * length($rf)));
-		$rf = substr($rf, 0, $break).substr($rf, $copystart, ($copystart + $size)).substr($rf, $break);
+		$rf = substr($rf, 0, $break).substr($rf, $copystart, $size).substr($rf, $break);
 		print STDERR "Added insertion from $copystart to " . ($copystart + $size) . "\n";
 	}
 	print STDERR "Added $nins Insertions\n";
