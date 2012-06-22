@@ -243,7 +243,7 @@ sub run_bowtie_mapping {
   my $reads_file_one        = $self->{"bowtie_db"}->{"reads_file_one"};
   my $reads_file_two        = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir              = $self->{"work_dir"};
-  my $output_file           = "$work_dir/${reads_basename}_alignment.sam";
+  my $output_file           = "$work_dir/${reads_basename}_alignments.sam";
   $self->{"alignment_file"} = $output_file;
   print "Running mapping using Bowtie, using $num_threads threads...\n";
 
@@ -286,7 +286,8 @@ sub bowtie_identify {
   my $work_dir                = $self->{"work_dir"};
   my $outfile                 = "$work_dir/${reads_basename}_halfmapping.sam";
   my $outfile2                = "$work_dir/${reads_basename}_multmapping.sam";
-  my $outfile3                = "$work_dir/${reads_basename}_halfmapping_sorted.sam";
+  my $outfile3                = $outfile;
+  $outfile3                   =~ s/(\.[^.]+)$/_sorted.sam/;
   $self->{"halfmapping_file"} = $outfile;
   $self->{"multmapping_file"} = $outfile2;
   
@@ -661,7 +662,7 @@ sub assemble_groups {
   my $sorted_file         = $halfmap_file;
   $sorted_file            =~ s/(\.[^.]+)$/_sorted.sam/;
   my $velvet_data_dir     = "$work_dir/velvet-data";
-  my $results_file        = "$work_dir/${reads_basename}_all_contigs.fa";
+  my $results_file        = "$work_dir/${reads_basename}_contigs_velveth.fa";
   $self->{"contigs_file"} = $results_file;
   
   return if (-z $halfmap_file || !(-e $halfmap_file));
@@ -799,8 +800,9 @@ sub align_groups() {
   my $reads_file_one                = $self->{"bowtie_db"}->{"reads_file_one"};
   my $reads_file_two                = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir                      = $self->{"work_dir"};
-  my $output_file                   = "$work_dir/${reads_basename}_contigs_alignment.sam";
-  my $output_file_sorted            = "$work_dir/${reads_basename}_contigs_alignment_sorted.sam";
+  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned.sam";
+  my $output_file_sorted            = $output_file;
+  $output_file_sorted               =~ s/(\.[^.]+)$/_sorted.sam/;
   $self->{"contigs_alignment_file"} = $output_file;
 
   return if (-z $contigs_file || !(-e $contigs_file));
