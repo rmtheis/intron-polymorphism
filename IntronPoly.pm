@@ -561,7 +561,7 @@ sub filter1 {
   my $reads_basename      = $self->{"reads_basename"};
   my $frag_length         = $self->{"frag_length"};
   my $debug_file          = "$work_dir/${reads_basename}_fake_pairs_alignment.debug" if DEBUG;
-  my $outfile             = "$work_dir/${reads_basename}_filtered1.sam";
+  my $outfile             = "$work_dir/${reads_basename}_filtered.sam";
 
   # Save the filtered results in the place of the half-mapping alignment file
   $self->{"halfmapping_file"} = $outfile;
