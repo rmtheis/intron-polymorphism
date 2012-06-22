@@ -205,7 +205,7 @@ if (DELETIONS) {
 }
 
 # Save the mutated reference
-open(RD, ">${prefix}_derived_sequence.fa") || die;
+open(RD, ">${prefix}-mutated-reference.fa") || die;
 print RD ">Derived_from:_\"${prefix}\"\n";
 for ( my $pos = 0; $pos < length($rf); $pos += 70 ) {
   print RD substr($rf, $pos, 70), "\n";

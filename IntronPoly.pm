@@ -118,7 +118,7 @@ sub build_db {
 =head2 mapping_setup
 
  Title   : mapping_setup
- Usage   : $project->mapping_setup( "bowtie_dir", "bowtie_index_dir", "reads_dir", "read_pairs_base_name")
+ Usage   : $project->mapping_setup( "bowtie_dir", "index_dir", "reads_dir", "read_pairs_base_name")
  Function: Sets references to data files used for mapping reads to the reference genome, and validates
            input files
  Example : my $bowtie_dir = "/home/theis/bowtie2-2.0.0-beta6/";
@@ -136,10 +136,11 @@ sub build_db {
 sub mapping_setup {
   my $self                 = shift;
   my $bowtie_dir           = shift;
-  my $bowtie_index_dir     = shift;
+  my $index_dir            = shift;
   my $reads_dir            = shift;
   my $reads_basename       = shift;
   my $velvet_dir           = shift;
+  my $blast_dir            = shift;
   my $scripts_dir          = $self->{"scripts_dir"};
   my $work_dir             = $self->{"work_dir"};
   my $ref_genome           = $self->{"ref_genome"}->{"full_pathname"};
@@ -163,19 +164,20 @@ sub mapping_setup {
   die "$0: validate_fastq.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Create directory for Bowtie index files if necessary
-  $bowtie_index_dir = $1 if ( $bowtie_index_dir =~ /(.*)\/$/ );
-  unless ( -d $bowtie_index_dir ) {
-    &_make_dir($bowtie_index_dir);
+  $index_dir = $1 if ( $index_dir =~ /(.*)\/$/ );
+  unless ( -d $index_dir ) {
+    &_make_dir($index_dir);
   }
 
   # Remember paths needed for running
   $self->{"bowtie_db"} = {
-    bowtie_dir       => $bowtie_dir,
-    bowtie_index_dir => $bowtie_index_dir,
-    reads_file_one   => $reads_file_one,
-    reads_file_two   => $reads_file_two
+    bowtie_dir     => $bowtie_dir,
+    reads_file_one => $reads_file_one,
+    reads_file_two => $reads_file_two
   };
+  $self->{"index_dir"} = $index_dir;
   $self->{"velvet_dir"} = $velvet_dir;
+  $self->{"blast_dir"} = $velvet_dir;
   print "Using reference genome $ref_genome\n";
   print "Using reads file 1: $reads_file_one\n";
   print "Using reads file 2: $reads_file_two\n";
@@ -198,22 +200,22 @@ sub build_bowtie_index {
   my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
-  my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
-  unless ( -e "$bowtie_index_dir/$ref_genome_basename.1.bt2"
-    && "$bowtie_index_dir/$ref_genome_basename.2.bt2"
-    && "$bowtie_index_dir/$ref_genome_basename.3.bt2"
-    && "$bowtie_index_dir/$ref_genome_basename.4.bt2"
-    && "$bowtie_index_dir/$ref_genome_basename.rev.1.bt2"
-    && "$bowtie_index_dir/$ref_genome_basename.rev.2.bt2" )
+  my $index_dir           = $self->{"index_dir"};
+  unless ( -e "$index_dir/$ref_genome_basename.1.bt2"
+    && "$index_dir/$ref_genome_basename.2.bt2"
+    && "$index_dir/$ref_genome_basename.3.bt2"
+    && "$index_dir/$ref_genome_basename.4.bt2"
+    && "$index_dir/$ref_genome_basename.rev.1.bt2"
+    && "$index_dir/$ref_genome_basename.rev.2.bt2" )
   {
-    # Call bowtie-build to create the bowtie index
-    print "Creating bowtie index in $bowtie_index_dir...\n";
-    capture( "$bowtie_dir/bowtie2-build $ref_genome $bowtie_index_dir/$ref_genome_basename" );
+    # Call bowtie-build to create the Bowtie index
+    print "Creating bowtie index in $index_dir...\n";
+    capture( "${bowtie_dir}bowtie2-build $ref_genome $index_dir/$ref_genome_basename" );
     die "$0: bowtie2-build exited unsuccessful" if ( $EXITVAL != 0 );
   }
   else {
     print "Bowtie index already exists, not re-creating.\n";
-    print "Using Bowtie index at $bowtie_index_dir/$ref_genome_basename.*.bt2\n";
+    print "Using Bowtie index at $index_dir/$ref_genome_basename.*.bt2\n";
   }
 }
 
@@ -239,7 +241,7 @@ sub run_bowtie_mapping {
   my $reads_basename        = $self->{"reads_basename"};
   my $ref_genome_basename   = $self->{"ref_genome"}->{"basename"};
   my $bowtie_dir            = $self->{"bowtie_db"}->{"bowtie_dir"};
-  my $bowtie_index_dir      = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  my $index_dir             = $self->{"index_dir"};
   my $reads_file_one        = $self->{"bowtie_db"}->{"reads_file_one"};
   my $reads_file_two        = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir              = $self->{"work_dir"};
@@ -253,7 +255,7 @@ sub run_bowtie_mapping {
   
   # Call bowtie to run the mapping
   capture(
-        "${bowtie_dir}bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
+        "${bowtie_dir}bowtie2 -x $index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --no-hd "
       . "--maxins $maxins --minins $minins "
       . "--no-discordant "
@@ -301,13 +303,14 @@ sub bowtie_identify {
 #        "> $work_dir/${reads_basename}_alignment_pruned" );
 # die "$0: cut exited unsuccessful" if( $EXITVAL != 0 );
 
-  if ($scripts_dir ne "") {
-    $scripts_dir =~ s!/*$!/!; # Add trailing slash if not already present
-  }
+  $scripts_dir =~ s!/*$!/! if ($scripts_dir ne ""); # Add trailing slash if not already present
 
   # Determine length of read pair for use in filtering and grouping steps
   print "Determining fragment length...\n";
-  $self->{"frag_length"} = &_compute_frag_length( $scripts_dir, $alignment_file );
+  my $fragment_length = &_compute_frag_length( $scripts_dir, $alignment_file );
+  $fragment_length =~ s/\s+$//;
+  $self->{"frag_length"} = $fragment_length;
+  print "Median fragment length: $fragment_length nt\n";
 
   print "Identifying half-mapping read pairs...\n";
   
@@ -515,7 +518,7 @@ sub run_fake_pairs_alignment {
   my $reads_basename      = $self->{"reads_basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
-  my $bowtie_index_dir    = $self->{"bowtie_db"}->{"bowtie_index_dir"};
+  my $index_dir           = $self->{"index_dir"};
   my $outfile             = "$work_dir/${reads_basename}_fake_pairs_alignment.sam";
   $self->{"realignment_file"} = $outfile;
   
@@ -523,13 +526,11 @@ sub run_fake_pairs_alignment {
   
   print "Aligning simulated paired-end reads...\n";
 
-  if ($bowtie_dir ne "") {
-    $bowtie_dir =~ s!/*$!/!; # Add trailing slash if not already present
-  }
+  $bowtie_dir =~ s!/*$!/! if ($bowtie_dir ne ""); # Add trailing slash if not already present
   
   # Run Bowtie with the fake read pairs as input
   capture(
-        "${bowtie_dir}bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
+        "${bowtie_dir}bowtie2 -x $index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --no-hd "
       . "--no-mixed --no-discordant --no-contain --no-overlap "
       . "-1 $pairs_file_1 -2 $pairs_file_2 "
@@ -662,15 +663,13 @@ sub assemble_groups {
   my $sorted_file         = $halfmap_file;
   $sorted_file            =~ s/(\.[^.]+)$/_sorted.sam/;
   my $velvet_data_dir     = "$work_dir/velvet-data";
-  my $results_file        = "$work_dir/${reads_basename}_contigs_velveth.fa";
+  my $results_file        = "$work_dir/${reads_basename}_contigs.fa";
   $self->{"contigs_file"} = $results_file;
   
   return if (-z $halfmap_file || !(-e $halfmap_file));
   print "Performing local assemblies...\n";
 
-  if ($velvet_dir ne "") {
-    $velvet_dir =~ s!/*$!/!; # Add trailing slash if not already present
-  }
+  $velvet_dir =~ s!/*$!/! if ($velvet_dir ne ""); # Add trailing slash if not already present
   
   # Sort by alignment position
   capture( "sort -k3,3 -k8n,8 -o $sorted_file $halfmap_file" );
@@ -775,6 +774,39 @@ sub assemble_groups {
   print "Assembled $num_met_cutoff contigs meeting coverage cutoff.\n";
 }
 
+=head2 build_blast_index
+
+ Title   : build_blast_index
+ Usage   : $project->build_blast_index()
+ Function: 
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
+sub build_blast_index() {
+  my $self                = shift;
+  my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $index_dir           = $self->{"index_dir"};
+  my $reads_basename      = $self->{"reads_basename"};
+  unless ( -e "$index_dir/$ref_genome_basename.1.bt2"
+    && "$index_dir/$ref_genome_basename.nhr"
+    && "$index_dir/$ref_genome_basename.nin"
+    && "$index_dir/$ref_genome_basename.nsq" )
+  {
+    # Call formatdb to create the Blast index
+    print "Creating bowtie index in $index_dir...\n";
+    capture( "formatdb -p F -i $ref_genome -n .$index_dir/$reads_basename" );
+    die "$0: formatdb exited unsuccessful" if ( $EXITVAL != 0 );
+  }
+  else {
+    print "Blast index already exists, not re-creating.\n";
+    print "Using Blast index at $index_dir/$ref_genome_basename.n*\n";
+  }  
+}
+
 =head2 align_groups
 
  Title   : align_groups
@@ -785,45 +817,30 @@ sub assemble_groups {
            $project->assemble_groups( 250, 3 );
            $project->align_groups();
  Returns : No return value
- Args    : Path to multi-FastA format file containing contigs for alignment
+ Args    : Path to multi-FastA format file containing contigs for alignment (optional)
 
 =cut
 
 sub align_groups() {
   my $self                          = shift;
-  my $num_threads                   = shift;
   my $contigs_file                  = shift || $self->{"contigs_file"};
   my $reads_basename                = $self->{"reads_basename"};
   my $ref_genome_basename           = $self->{"ref_genome"}->{"basename"};
-  my $bowtie_dir                    = $self->{"bowtie_db"}->{"bowtie_dir"};
-  my $bowtie_index_dir              = $self->{"bowtie_db"}->{"bowtie_index_dir"};
-  my $reads_file_one                = $self->{"bowtie_db"}->{"reads_file_one"};
-  my $reads_file_two                = $self->{"bowtie_db"}->{"reads_file_two"};
+  my $blast_dir                     = $self->{"blast_dir"};
+  my $index_dir                     = $self->{"index_dir"};
   my $work_dir                      = $self->{"work_dir"};
-  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned.sam";
-  my $output_file_sorted            = $output_file;
-  $output_file_sorted               =~ s/(\.[^.]+)$/_sorted.sam/;
+  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned";
+  my $index                         = "$index_dir/${reads_basename}";
   $self->{"contigs_alignment_file"} = $output_file;
 
   return if (-z $contigs_file || !(-e $contigs_file));
   print "Aligning assembled contigs to reference genome...\n";
   
-  if ($bowtie_dir ne "") {
-    $bowtie_dir =~ s!/*$!/!; # Add trailing slash if not already present
-  }
+  $blast_dir =~ s!/*$!/! if ($blast_dir ne ""); # Add trailing slash if not already present
   
-  # Call bowtie to run the mapping
-  capture(
-        "${bowtie_dir}bowtie2 -x $bowtie_index_dir/$ref_genome_basename "
-      . "--threads $num_threads --reorder --no-hd "
-      . "-U $contigs_file -f "
-      . "--no-unal "
-      . "-S $output_file"
-  );
-  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
-
-  # Sort the output file
-  capture( "sort -k 4,4 -n -o $output_file_sorted $output_file" );
+  # Call Blast to run the mapping
+  capture( "${blast_dir}blastall -p blastn -d $index -i $contigs_file -out $output_file" );
+  die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
 }
 
 
@@ -841,7 +858,7 @@ sub _compute_frag_length {
 
 # Returns the reverse complement of the given string
 sub _reverseComplement {
-  my ($value) = shift;
+  my $value = shift;
   $value = scalar reverse $value;
   for ( 0 .. length($value) - 1 ) {
     substr( $value, $_, 1 ) = &_complement( substr( $value, $_, 1 ) );
@@ -851,6 +868,7 @@ sub _reverseComplement {
 
 # Returns the complement of the given string
 sub _complement {
+  my $input = shift;
   my %complementMap = (
     "A" => "T",
     "T" => "A",
@@ -860,32 +878,12 @@ sub _complement {
     "G" => "C",
     "c" => "g",
     "g" => "c",
-    "R" => "Y",
-    "Y" => "R",
-    "r" => "y",
-    "y" => "r",
-    "M" => "K",
-    "K" => "M",
-    "m" => "k",
-    "k" => "m",
-    "S" => "S",
-    "W" => "W",
-    "s" => "s",
-    "w" => "w",
-    "B" => "V",
-    "V" => "B",
-    "b" => "v",
-    "v" => "b",
-    "H" => "D",
-    "D" => "H",
-    "h" => "d",
-    "d" => "h",
     "N" => "N",
     "." => ".",
     "n" => "n"
   );
-  my $complementedString = $complementMap{ $_[0] }
-    or die "$0: Can't get reverse complement for '$_[0]'";
+  my $complementedString = $complementMap{ $input }
+    or die "$0: Can't get reverse complement for '$input'";
   return $complementedString;
 }
 
@@ -897,7 +895,7 @@ sub _isSecondaryAlignment {
 
 # Returns 1 if the given sum-of-flags value identifies a mate in a half-mapping read pair, otherwise returns 0
 # The mate may be either the aligning mate or the non-aligning mate in the half-mapping read pair.
-# Note: Also returns 1 for "long-mapping" alignments, in which both mates align independently but do not meet
+# Note: Also returns 1 for "far-mapping" alignments, in which both mates align independently but do not meet
 # fragment length constraints defined by Bowtie's "--minins" and "--maxins" options
 sub _isHalfMappingMate {
   my $flags = int(shift);
@@ -944,7 +942,7 @@ sub _check_dir {
 
 # Creates the given directory, and gives an error message on failure
 sub _make_dir {
-  my ($dirname) = @_;
+  my $dirname = shift;
   mkdir $dirname, 0755 or die "$0: could not create $dirname";
 }
 
