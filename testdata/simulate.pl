@@ -40,7 +40,8 @@ use List::Util qw(max min);
 use constant SUBSTITUTIONS => (0);
 use constant MICROINDELS => (0);
 use constant LARGER_REARRANGEMENTS => (0);
-use constant DELETIONS => (1);
+use constant DELETIONS => (0);
+use constant INSERTIONS => (1);
 use constant SEQ_ERRS => (0);
 use constant RAND_QUALS => (0);
 
@@ -199,14 +200,27 @@ if (DELETIONS) {
 		my $break = int(rand(0.8 * length($rf)));
 		my $size = int(rand(0.1 * length($rf)));
 		$rf = substr($rf, 0, $break).substr($rf, ($break + $size));
-		print "Added deletion from $break to " . ($break + $size) . "\n";
+		print STDERR "Added deletion from $break to " . ($break + $size) . "\n";
 	}
   print STDERR "Added $ndel Deletions\n";	
 }
 
+if (INSERTIONS) {
+	print STDERR "Adding insertions...\n";
+	my $nins = int(random_exponential(1, 3)+1);
+	for(1..$nins) {
+		my $copystart = int(rand(0.8 * length($rf)));
+		my $size = int(rand(0.1 * length($rf)));
+		my $break = int(rand(0.8 * length($rf)));
+		$rf = substr($rf, 0, $break).substr($rf, $copystart, ($copystart + $size)).substr($rf, $break);
+		print STDERR "Added insertion from $copystart to " . ($copystart + $size) . "\n";
+	}
+	print STDERR "Added $nins Insertions\n";
+}
+
 # Save the mutated reference
 open(RD, ">${prefix}-mutated-reference.fa") || die;
-print RD ">Derived_from:_\"${prefix}\"\n";
+print RD ">Derived_from:_${prefix}\n";
 for ( my $pos = 0; $pos < length($rf); $pos += 70 ) {
   print RD substr($rf, $pos, 70), "\n";
 }
