@@ -24,7 +24,7 @@ use IO::File;
 
 unless ( @ARGV ) {
   print "Usage: $0 -i fasta_file\n";
-  die;
+  exit;
 }
 my $input_file;
 GetOptions( "i=s" =>\$input_file );
@@ -40,7 +40,7 @@ if ( $first_line !~ m/^>\s*\w/ ) {
 
 while( my $line = $ifh->getline ) {
 
-    if( !($line =~ /^[A-IK-NP-Z]+$/i || $line =~ /^>\s*\w/) ) {
+    if( !($line =~ /^[A-IK-NP-Z]+$/i || $line =~ /^>\s*\w/ || $line =~ /^$/) ) {
       print STDERR "Validation error: FastA line is not valid sequence or comment: $line";
       print STDERR "File: $input_file\n";
       die;

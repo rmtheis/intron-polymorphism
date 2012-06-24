@@ -32,7 +32,7 @@ use IO::File;
 
 unless ( @ARGV ) {
   print "Usage: $0 -i mate_file_basename\n";
-  die;
+  exit;
 }
 my $base_name;
 GetOptions( "i=s" =>\$base_name );
