@@ -79,7 +79,7 @@ $maxins = $maxins || 700;
 $intron_length = $intron_length || 250;
 $num_aln = $num_aln || 3;
 $cov_cutoff = $cov_cutoff || 2;
-$hash_length = $hash_length || 13;
+$hash_length = $hash_length || 15;
 $index_dir = $index_dir || $ENV{HOME} . "/intron-polymorphism/index";
 $existing_alignment_file = $existing_alignment_file || "";
 $existing_halfmapping_file = $existing_halfmapping_file || "";
@@ -107,7 +107,7 @@ if ( $skip_to eq "C" ) { print "Skipping to collecting\n"; goto COLLECTION; }
 if ( $skip_to eq "F" ) { print "Skipping to filtering\n";  goto FILTERING; }
 if ( $skip_to eq "A" ) { print "Skipping to assembly\n";   goto ASSEMBLY; }
 if ( $skip_to eq "L" ) { print "Skipping to alignment\n";  goto ALIGNMENT; }
-if ( $skip_to eq "N" ) { print "Skippint to analysis\n";   goto ANALYSIS; }
+if ( $skip_to eq "N" ) { print "Skipping to analysis\n";   goto ANALYSIS; }
 
 ####################
 # RUN THE PIPELINE #
@@ -123,7 +123,7 @@ $project->mapping_setup(
   $velvet_dir,
   $blast_dir,
 );
-$project->build_bowtie_index();
+$project->build_bowtie_index( $index_dir );
 $project->run_bowtie_mapping( $bowtie_num_threads, $minins, $maxins );
 
 COLLECTION:
@@ -143,7 +143,7 @@ $project->assemble_groups( $intron_length, $num_aln, $hash_length, $cov_cutoff )
 ALIGNMENT:
 print "Running ALIGNMENT...\n";
 $project->build_blast_index( $index_dir );
-$project->align_groups( $bowtie_num_threads );
+$project->align_groups();
 
 #ANALYSIS:
 

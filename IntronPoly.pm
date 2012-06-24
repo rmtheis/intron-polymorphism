@@ -191,16 +191,17 @@ sub mapping_setup {
  Example : $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
            $project->build_bowtie_index();
  Returns : No return value
- Args    : No arguments
+ Args    : Directory containing Bowtie index files (optional)
 
 =cut
 
 sub build_bowtie_index {
   my $self                = shift;
+  my $index_dir           = shift || $self->{"index_dir"};
   my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
-  my $index_dir           = $self->{"index_dir"};
+  $self->{"index_dir"}    = $index_dir;
   unless ( -e "$index_dir/$ref_genome_basename.1.bt2"
     && "$index_dir/$ref_genome_basename.2.bt2"
     && "$index_dir/$ref_genome_basename.3.bt2"
@@ -208,7 +209,7 @@ sub build_bowtie_index {
     && "$index_dir/$ref_genome_basename.rev.1.bt2"
     && "$index_dir/$ref_genome_basename.rev.2.bt2" )
   {
-    # Call bowtie-build to create the Bowtie index
+    # Create the Bowtie index
     print "Creating bowtie index in $index_dir...\n";
     capture( "${bowtie_dir}bowtie2-build $ref_genome $index_dir/$ref_genome_basename" );
     die "$0: bowtie2-build exited unsuccessful" if ( $EXITVAL != 0 );
@@ -249,11 +250,9 @@ sub run_bowtie_mapping {
   $self->{"alignment_file"} = $output_file;
   print "Running mapping using Bowtie, using $num_threads threads...\n";
 
-  if ($bowtie_dir ne "") {
-    $bowtie_dir =~ s!/*$!/!; # Add trailing slash if not already present
-  }
+  $bowtie_dir =~ s!/*$!/! if ($bowtie_dir ne ""); # Add trailing slash if not already present
   
-  # Call bowtie to run the mapping
+  # Call Bowtie to run the mapping
   capture(
         "${bowtie_dir}bowtie2 -x $index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --no-hd "
@@ -523,7 +522,6 @@ sub run_fake_pairs_alignment {
   $self->{"realignment_file"} = $outfile;
   
   return if (-z $pairs_file_1 || !(-e $pairs_file_1));
-  
   print "Aligning simulated paired-end reads...\n";
 
   $bowtie_dir =~ s!/*$!/! if ($bowtie_dir ne ""); # Add trailing slash if not already present
@@ -656,12 +654,12 @@ sub assemble_groups {
   my $hash_length         = shift;
   my $cov_cutoff          = shift;
   my $halfmap_file        = shift || $self->{"halfmapping_file"};
+  my $sorted_file         = $halfmap_file;
+  $sorted_file            =~ s/(\.[^.]+)$/_sorted.sam/;
   my $work_dir            = $self->{"work_dir"};
   my $velvet_dir          = $self->{"velvet_dir"};
   my $reads_basename      = $self->{"reads_basename"};
   my $frag_length         = $self->{"frag_length"};
-  my $sorted_file         = $halfmap_file;
-  $sorted_file            =~ s/(\.[^.]+)$/_sorted.sam/;
   my $velvet_data_dir     = "$work_dir/velvet-data";
   my $results_file        = "$work_dir/${reads_basename}_contigs.fa";
   $self->{"contigs_file"} = $results_file;
@@ -702,6 +700,7 @@ sub assemble_groups {
     }
 
     # Add or discard based on position, treating upstream mates differently from downstream mates
+    my $reversed;
     if ( (($flags & 8) == 0) && (($flags & 0x20 ) == 0) ) { # 69 or 133
       if ( (( $pos - ($frag_length - length($seq)) - $last_len ) - $last_pos) < $overlap_dist
           && (($chr eq $last_chr) || $last_chr eq "" )) {
@@ -711,7 +710,7 @@ sub assemble_groups {
         $last_len = length($seq);
         next;
       }
-      $last_pos = $pos - ($frag_length - length($seq));
+      $reversed = 1;
     } else { # 101 or 165
       if ( (( $pos - $last_pos ) - $last_len) <= $overlap_dist
           && (($chr eq $last_chr) || $last_chr eq "" )) {
@@ -721,10 +720,9 @@ sub assemble_groups {
         $last_len = length($seq);
         next;
       }
-      $last_pos = $pos;
+      $reversed = 0;
     }
-    $last_chr = $chr;
-    $last_len = length($seq);
+
 
     # Run velveth on groups of 2 or more reads using stdout
     if ( scalar(@groups) >= $num_aln ) {
@@ -741,9 +739,6 @@ sub assemble_groups {
       my $outdir = "$velvet_data_dir/group_${count}/";
       capture( "${velvet_dir}velveth $outdir $hash_length -sam -short $outfile" );
       die "$0: velveth exited unsuccessful" if ( $EXITVAL != 0 );
-
-      # Delete the SAM file of read data unless we're debugging
-      #unlink( $outfile ) if !DEBUG or die "$0: cannot delete $outfile: $!";
 
       # Run velvetg on groups
       capture("${velvet_dir}velvetg $outdir -cov_cutoff $cov_cutoff");
@@ -767,8 +762,49 @@ sub assemble_groups {
       @groups = ();
     }
     $new_group = 1;
+    $last_chr = $chr;
+    $last_len = length($seq);
+    if ($reversed == 1) {
+      $last_pos = $pos - ($frag_length - length($seq));
+    } else {
+      $last_pos = $pos;
+    }
   }
   $ifh->close;
+  
+  # Handle the last group
+  if ( scalar(@groups) >= $num_aln ) {
+    # Open output file
+    ++$count;
+    my $outfile = "$work_dir/velvet-data/${reads_basename}_group_$count.txt";
+    my $ofh = IO::File->new( $outfile, 'w' ) or die "$0: Can't open $outfile: $!";
+  
+    while ( scalar(@groups) > 0 ) {
+      print $ofh shift(@groups);
+    }
+    $ofh->close();
+    my $outdir = "$velvet_data_dir/group_${count}/";
+    capture( "${velvet_dir}velveth $outdir $hash_length -sam -short $outfile" );
+    die "$0: velveth exited unsuccessful" if ( $EXITVAL != 0 );
+  
+    # Run velvetg on groups
+    capture("${velvet_dir}velvetg $outdir -cov_cutoff $cov_cutoff");
+    die "$0: velvetg exited unsuccessful" if ( $EXITVAL != 0 );
+  
+    if (!(-z "$outdir/contigs.fa")) {
+      # Append results to the multi-FastA output file
+      $num_met_cutoff++;
+      my $ifh2 = IO::File->new( "$outdir/contigs.fa", 'r' ) or die "$0: $outdir/contigs.fa: $!";
+      while ( my $contig_line = $ifh2->getline ) {
+        if ($contig_line =~ m/^>/) {
+          print $ofh2 ">Group_${count}_(${left_pos}-${last_pos})_" . substr($contig_line, 1);
+        } else {
+          print $ofh2 $contig_line;
+        }
+      }
+      $ifh2->close;
+    }
+  }
   $ofh2->close;
   print "Identified $count groups for assembly.\n";
   print "Assembled $num_met_cutoff contigs meeting coverage cutoff.\n";
@@ -791,20 +827,19 @@ sub build_blast_index() {
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $index_dir           = $self->{"index_dir"};
   my $reads_basename      = $self->{"reads_basename"};
-  unless ( -e "$index_dir/$ref_genome_basename.1.bt2"
-    && "$index_dir/$ref_genome_basename.nhr"
+  unless ( -e "$index_dir/$ref_genome_basename.nhr"
     && "$index_dir/$ref_genome_basename.nin"
     && "$index_dir/$ref_genome_basename.nsq" )
   {
     # Call formatdb to create the Blast index
-    print "Creating bowtie index in $index_dir...\n";
-    capture( "formatdb -p F -i $ref_genome -n .$index_dir/$reads_basename" );
+    print "Creating Blast index in $index_dir...\n";
+    capture( "formatdb -p F -i $ref_genome -n $index_dir/$ref_genome_basename" );
     die "$0: formatdb exited unsuccessful" if ( $EXITVAL != 0 );
   }
   else {
     print "Blast index already exists, not re-creating.\n";
     print "Using Blast index at $index_dir/$ref_genome_basename.n*\n";
-  }  
+  }
 }
 
 =head2 align_groups
@@ -830,7 +865,7 @@ sub align_groups() {
   my $index_dir                     = $self->{"index_dir"};
   my $work_dir                      = $self->{"work_dir"};
   my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned";
-  my $index                         = "$index_dir/${reads_basename}";
+  my $index                         = "$index_dir/${ref_genome_basename}";
   $self->{"contigs_alignment_file"} = $output_file;
 
   return if (-z $contigs_file || !(-e $contigs_file));
@@ -839,8 +874,10 @@ sub align_groups() {
   $blast_dir =~ s!/*$!/! if ($blast_dir ne ""); # Add trailing slash if not already present
   
   # Call Blast to run the mapping
-  capture( "${blast_dir}blastall -p blastn -d $index -i $contigs_file -out $output_file" );
+  capture( "${blast_dir}blastall -p blastn -d $index -i $contigs_file -o $output_file" );
   die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
+  
+  print "Results saved to $output_file\n";
 }
 
 
