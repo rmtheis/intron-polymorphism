@@ -200,7 +200,7 @@ if (DELETIONS) {
 		my $break = int(rand(0.8 * length($rf)));
 		my $size = int(rand(0.1 * length($rf)));
 		$rf = substr($rf, 0, $break).substr($rf, ($break + $size));
-		print STDERR "Added deletion from $break to " . ($break + $size) . "\n";
+		print STDERR "Deleting $size nt at $break\n";
 	}
   print STDERR "Added $ndel Deletions\n";	
 }
@@ -213,7 +213,7 @@ if (INSERTIONS) {
 		my $size = int(rand(0.1 * length($rf)));
 		my $break = int(rand(0.8 * length($rf)));
 		$rf = substr($rf, 0, $break).substr($rf, $copystart, $size).substr($rf, $break);
-		print STDERR "Added insertion from $copystart to " . ($copystart + $size) . "\n";
+		print STDERR "Inserting $size nt at $copystart, copied from $break\n";
 	}
 	print STDERR "Added $nins Insertions\n";
 }
