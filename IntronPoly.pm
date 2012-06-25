@@ -110,9 +110,6 @@ sub build_db {
   $self->{"ref_genome"}->{"full_pathname"} = $ref_genome_filename;
   $self->{"ref_genome"}->{"basename"}      = $file;
   $self->{"ref_genome"}->{"dir"}           = $dir;
-
-  # Set paths to working files used for input/output
-
 }
 
 =head2 mapping_setup
@@ -286,21 +283,14 @@ sub bowtie_identify {
   my $scripts_dir             = $self->{"scripts_dir"};
   my $work_dir                = $self->{"work_dir"};
   my $outfile                 = "$work_dir/${reads_basename}_halfmapping.sam";
-  my $outfile2                = "$work_dir/${reads_basename}_multmapping.sam";
-  my $outfile3                = $outfile;
-  $outfile3                   =~ s/(\.[^.]+)$/_sorted.sam/;
+  my $outfile2                = $outfile;
+  $outfile2                   =~ s/(\.[^.]+)$/_sorted.sam/;
   $self->{"halfmapping_file"} = $outfile;
-  $self->{"multmapping_file"} = $outfile2;
   
   if (!-e $alignment_file) {
     print STDERR "Alignment file not found.\n";
     return;
   }
-
-# # Remove all rows we're not interested in now
-# capture( "cut -f 1,2,4,10,11 $alignment_file " .
-#        "> $work_dir/${reads_basename}_alignment_pruned" );
-# die "$0: cut exited unsuccessful" if( $EXITVAL != 0 );
 
   $scripts_dir =~ s!/*$!/! if ($scripts_dir ne ""); # Add trailing slash if not already present
 
@@ -315,7 +305,6 @@ sub bowtie_identify {
   
   my $ifh  = IO::File->new( $alignment_file, 'r' ) or die "Can't open $alignment_file: $!";
   my $ofh  = IO::File->new( $outfile, 'w' ) or die "Can't create $outfile: $!";
-  my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "Can't create $outfile2: $!";
   my $prev_id         = "";
   my $discard_this_id = 0;
   my $mapping         = 0;
@@ -344,14 +333,8 @@ sub bowtie_identify {
         print $ofh "$line1$line2";
         $count++;
       }
-      elsif ( scalar @print_lines == 3 && $prev_id ne "" ) {
 
-        # Print the trio where two mates align concordantly, and one has a secondary alignment
-        foreach my $ln (@print_lines) {
-          print $ofh2 $ln;
-        }
-        @print_lines = ();
-      } # Note: can print cases of multiple (>3/pair) alignments by extending this if-else block
+      # Discard mates with multiple alignments here
       $discard_this_id = 0;
       $prev_id         = $mate_id;
     }
@@ -404,14 +387,13 @@ sub bowtie_identify {
   }
   $ifh->close;
   $ofh->close;
-  $ofh2->close;
   if ($count == 0) {
     print STDERR "No half-mapping read pairs found.\n";
     return;
   }
   print "Saved $count half-mapping read pair alignments to $outfile\n";
   print "Sorting...\n";
-  capture( "sort -k3,3 -k8n,8 -o $outfile3 $outfile" );
+  capture( "sort -k3,3 -k8n,8 -o $outfile2 $outfile" );
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
 }
 
