@@ -711,7 +711,7 @@ sub assemble_groups {
 
       # Open output file
       ++$count;
-      my $outfile = "$work_dir/velvet-data/${reads_basename}_group_$count.txt";
+      my $outfile = "$work_dir/velvet-data/${reads_basename}_group_$count.sam";
       my $ofh = IO::File->new( $outfile, 'w' ) or die "$0: Can't open $outfile: $!";
 
       while ( scalar(@groups) > 0 ) {
@@ -758,7 +758,7 @@ sub assemble_groups {
   if ( scalar(@groups) >= $num_aln ) {
     # Open output file
     ++$count;
-    my $outfile = "$work_dir/velvet-data/${reads_basename}_group_$count.txt";
+    my $outfile = "$work_dir/velvet-data/${reads_basename}_group_$count.sam";
     my $ofh = IO::File->new( $outfile, 'w' ) or die "$0: Can't open $outfile: $!";
   
     while ( scalar(@groups) > 0 ) {
