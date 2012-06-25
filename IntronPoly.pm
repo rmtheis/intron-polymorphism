@@ -243,7 +243,7 @@ sub run_bowtie_mapping {
   my $reads_file_one        = $self->{"bowtie_db"}->{"reads_file_one"};
   my $reads_file_two        = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir              = $self->{"work_dir"};
-  my $output_file           = "$work_dir/${reads_basename}_alignments.sam";
+  my $output_file           = "$work_dir/${reads_basename}_initial_alignments.sam";
   $self->{"alignment_file"} = $output_file;
   print "Running mapping using Bowtie, using $num_threads threads...\n";
 
