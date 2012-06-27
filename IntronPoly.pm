@@ -611,16 +611,16 @@ sub filter1 {
   print "Discarded $discard_count mates out of $read_count\n";
 }
 
-=head2 assemble_groups
+=head2 assemble_groups_velvet
 
- Title   : assemble_groups
- Usage   : $project->assemble_groups()
+ Title   : assemble_groups_velvet
+ Usage   : $project->assemble_groups_velvet()
  Function: Identifies groups of half-mapping read pairs that align to the reference genome at
            locations near one another, and performs a local assembly on the unaligned mates in each
            group
  Example : $project->bowtie_identify();
            $project->filter( 8 );
-           $project->assemble_groups( 250, 3, 13, 3 );
+           $project->assemble_groups_velvet( 250, 3, 13, 3 );
  Returns : No return value
  Args    : Expected intron length for group identification, Minimum number of unaligned mates
            from half-mapping read pairs needed near one another to consider them to be a group,
@@ -629,7 +629,7 @@ sub filter1 {
 
 =cut
 
-sub assemble_groups {
+sub assemble_groups_velvet {
   my $self                = shift;
   my $intron_length       = shift;
   my $num_aln             = shift;

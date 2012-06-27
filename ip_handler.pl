@@ -74,7 +74,7 @@ $reads_basename = $reads_basename || "m_chr1_6";
 $blast_dir = $blast_dir || "";
 $bowtie_dir = $bowtie_dir || "";
 $velvet_dir = $velvet_dir || "";
-$minins = $minins || 10;
+$minins = $minins || 0;
 $maxins = $maxins || 700;
 $intron_length = $intron_length || 250;
 $num_aln = $num_aln || 3;
@@ -138,7 +138,7 @@ $project->filter1();
 
 ASSEMBLY:
 print "Running ASSEMBLY...\n";
-$project->assemble_groups( $intron_length, $num_aln, $hash_length, $cov_cutoff );
+$project->assemble_groups_velvet( $intron_length, $num_aln, $hash_length, $cov_cutoff );
 
 ALIGNMENT:
 print "Running ALIGNMENT...\n";
