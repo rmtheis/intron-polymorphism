@@ -20,8 +20,9 @@ use Getopt::Long;
 use IO::File;
 
 #
-# Converts a SAM format file to Fastq format. Output goes to standard out.
-# Eliminates unaligned reads and secondary alignments.
+# Converts a SAM format file to Fastq format.
+#
+# Output is printed to standard out. Unaligned reads and secondary alignments are ignored.
 #
 
 unless ( @ARGV ) {
@@ -29,10 +30,9 @@ unless ( @ARGV ) {
   exit;
 }
 my $input_file;
-GetOptions( "i=s" =>\$input_file );
+GetOptions( "i=s" =>\$input_file ) || die "$0: Bad option";
 
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
-
 while ( my $line = $ifh->getline ) {
   next if $line =~ m/^@/;
   my @f = split(/\t/, $line);

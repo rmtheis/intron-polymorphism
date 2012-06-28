@@ -19,12 +19,12 @@ use Getopt::Long;
 use IO::File;
 
 #
-# Performs basic validation on paired-end read files in FastQ format:
+# Performs basic validation on paired read files in FastQ format. Ensures that:
 #
-#   1. Checks that read IDs and their order match between mate 1 and mate 2
-#   2. Checks for tabs anywhere in the files
-#   3. Checks for pipes '|' on read ID lines
-#   4. Checks for any header lines not starting with '@'
+#   1. Read IDs and their order match between mate 1 and mate 2
+#   2. There are no tabs anywhere in the files
+#   3. There are no pipes '|' on read ID lines
+#   4. Header lines do not start with '@'
 #
 # If any problems are found, this script alerts the user and immediately exits. No changes are made
 # to the input files.
