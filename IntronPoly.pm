@@ -63,8 +63,9 @@ sub new {
 sub set_work_dir {
   my $self        = shift;
   my $scripts_dir = shift;
+  $scripts_dir =~ s!/*$!/! if ($scripts_dir ne ""); # Add trailing slash if not already present
   $self->{"scripts_dir"} = $scripts_dir;
-  my $work_dir = shift || "$scripts_dir/run-" . &_datestamp;
+  my $work_dir = shift || "${scripts_dir}run-" . &_datestamp;
   unless ( -e $work_dir ) {
     $work_dir = $1 if ( $work_dir =~ /(.*)\/$/ );
     &_make_dir($work_dir);
@@ -76,11 +77,12 @@ sub set_work_dir {
   }
   $self->{"work_dir"} = $work_dir;
 
-  my $velvet_data_dir = "$work_dir/velvet-data";
-  unless ( -d $velvet_data_dir ) {
-    &_make_dir($velvet_data_dir);
-    print "Created velvet directory $velvet_data_dir\n";
+  my $assembly_dir = "$work_dir/assembly";
+  unless ( -d $assembly_dir ) {
+    &_make_dir($assembly_dir);
+    print "Created assembly data directory $assembly_dir\n";
   }
+  $self->{"assembly_dir"} = $assembly_dir;
   return $work_dir;
 }
 
@@ -115,13 +117,12 @@ sub build_db {
 =head2 mapping_setup
 
  Title   : mapping_setup
- Usage   : $project->mapping_setup( "bowtie_dir", "index_dir", "reads_dir", "read_pairs_base_name")
+ Usage   : $project->mapping_setup( "index_dir", "reads_dir", "read_pairs_base_name")
  Function: Sets references to data files used for mapping reads to the reference genome, and validates
            input files
- Example : my $bowtie_dir = "/home/theis/bowtie2-2.0.0-beta6/";
-           my $index_dir = "/home/theis/bt2/";
+ Example : my $index_dir = "/home/theis/bt2/";
            my $reads_dir = "/home/theis/reads/";
-           $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
+           $project->mapping_setup( $index_dir, $reads_dir, "reads" );
  Returns : No return value
  Args    : Scalar full path to the Bowtie executable directory, scalar full path to the Bowtie
            index directory, scalar full path to the directory containing the Fastq read pairs files,
@@ -132,12 +133,9 @@ sub build_db {
 
 sub mapping_setup {
   my $self                 = shift;
-  my $bowtie_dir           = shift;
   my $index_dir            = shift;
   my $reads_dir            = shift;
   my $reads_basename       = shift;
-  my $velvet_dir           = shift;
-  my $blast_dir            = shift;
   my $scripts_dir          = $self->{"scripts_dir"};
   my $work_dir             = $self->{"work_dir"};
   my $ref_genome           = $self->{"ref_genome"}->{"full_pathname"};
@@ -146,7 +144,7 @@ sub mapping_setup {
   die "$0: reference genome directory $ref_genome_dir does not exist" unless ( -d $ref_genome_dir );
 
   # Perform basic validation on reference genome
-  capture("$scripts_dir/validate_fasta.pl -i $ref_genome");
+  capture("${scripts_dir}validate_fasta.pl -i $ref_genome");
   die "$0: validate_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Ensure that read pairs files exist
@@ -157,7 +155,7 @@ sub mapping_setup {
   die "$0: reads file $reads_file_two does not exist" unless ( -e $reads_file_two );
 
   # Perform basic validation on read pairs files
-  capture("$scripts_dir/validate_fastq.pl -i $reads_dir/$reads_basename");
+  capture("${scripts_dir}validate_fastq.pl -i $reads_dir/$reads_basename");
   die "$0: validate_fastq.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Create directory for Bowtie index files if necessary
@@ -168,13 +166,10 @@ sub mapping_setup {
 
   # Remember paths needed for running
   $self->{"bowtie_db"} = {
-    bowtie_dir     => $bowtie_dir,
     reads_file_one => $reads_file_one,
     reads_file_two => $reads_file_two
   };
   $self->{"index_dir"} = $index_dir;
-  $self->{"velvet_dir"} = $velvet_dir;
-  $self->{"blast_dir"} = $velvet_dir;
   print "Using reference genome $ref_genome\n";
   print "Using reads file 1: $reads_file_one\n";
   print "Using reads file 2: $reads_file_two\n";
@@ -185,7 +180,7 @@ sub mapping_setup {
  Title   : build_bowtie_index
  Usage   : $project->build_bowtie_index();
  Function: Runs the bowtie2-build indexer to create a Bowtie index from the reference genome
- Example : $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
+ Example : $project->mapping_setup( $index_dir, $reads_dir, "reads" );
            $project->build_bowtie_index();
  Returns : No return value
  Args    : Directory containing Bowtie index files (optional)
@@ -197,7 +192,6 @@ sub build_bowtie_index {
   my $index_dir           = shift || $self->{"index_dir"};
   my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
   $self->{"index_dir"}    = $index_dir;
   unless ( -e "$index_dir/$ref_genome_basename.1.bt2"
     && "$index_dir/$ref_genome_basename.2.bt2"
@@ -208,7 +202,7 @@ sub build_bowtie_index {
   {
     # Create the Bowtie index
     print "Creating bowtie index in $index_dir...\n";
-    capture( "${bowtie_dir}bowtie2-build $ref_genome $index_dir/$ref_genome_basename" );
+    capture( "bowtie2-build $ref_genome $index_dir/$ref_genome_basename" );
     die "$0: bowtie2-build exited unsuccessful" if ( $EXITVAL != 0 );
   }
   else {
@@ -222,7 +216,7 @@ sub build_bowtie_index {
  Title   : run_bowtie_mapping
  Usage   : $project->run_bowtie_mapping( num_threads, minins, maxins )
  Function: Aligns reads to the reference genome and saves output file
- Example : $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
+ Example : $project->mapping_setup( $index_dir, $reads_dir, "reads" );
            $project->build_bowtie_index();
            $project->run_bowtie_mapping( 8, 100, 500 );
  Returns : No return value
@@ -238,7 +232,6 @@ sub run_bowtie_mapping {
   my $maxins                = shift;
   my $reads_basename        = $self->{"reads_basename"};
   my $ref_genome_basename   = $self->{"ref_genome"}->{"basename"};
-  my $bowtie_dir            = $self->{"bowtie_db"}->{"bowtie_dir"};
   my $index_dir             = $self->{"index_dir"};
   my $reads_file_one        = $self->{"bowtie_db"}->{"reads_file_one"};
   my $reads_file_two        = $self->{"bowtie_db"}->{"reads_file_two"};
@@ -246,12 +239,10 @@ sub run_bowtie_mapping {
   my $output_file           = "$work_dir/${reads_basename}_initial_alignments.sam";
   $self->{"alignment_file"} = $output_file;
   print "Running mapping using Bowtie, using $num_threads threads...\n";
-
-  $bowtie_dir =~ s!/*$!/! if ($bowtie_dir ne ""); # Add trailing slash if not already present
   
   # Call Bowtie to run the mapping
   capture(
-        "${bowtie_dir}bowtie2 -x $index_dir/$ref_genome_basename "
+        "bowtie2 -x $index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --no-hd "
       . "--maxins $maxins --minins $minins "
       . "--no-discordant "
@@ -269,7 +260,7 @@ sub run_bowtie_mapping {
  Usage   : $project->bowtie_identify()
  Function: Identifies half-mapping read pairs from the read alignment output file
  Example : $project->build_bowtie_index();
-           $project->mapping_setup( $bowtie_dir, $index_dir, $reads_dir, "reads" );
+           $project->mapping_setup( $index_dir, $reads_dir, "reads" );
            $project->bowtie_identify();
  Returns : No return value
  Args    : Scalar path to alignment file to use (optional)
@@ -498,19 +489,16 @@ sub run_fake_pairs_alignment {
   my $work_dir            = $self->{"work_dir"};
   my $reads_basename      = $self->{"reads_basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $bowtie_dir          = $self->{"bowtie_db"}->{"bowtie_dir"};
   my $index_dir           = $self->{"index_dir"};
   my $outfile             = "$work_dir/${reads_basename}_fake_pairs_alignment.sam";
   $self->{"realignment_file"} = $outfile;
   
   return if (-z $pairs_file_1 || !(-e $pairs_file_1));
   print "Aligning simulated paired-end reads...\n";
-
-  $bowtie_dir =~ s!/*$!/! if ($bowtie_dir ne ""); # Add trailing slash if not already present
   
   # Run Bowtie with the fake read pairs as input
   capture(
-        "${bowtie_dir}bowtie2 -x $index_dir/$ref_genome_basename "
+        "bowtie2 -x $index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --no-hd "
       . "--no-mixed --no-discordant --no-contain --no-overlap "
       . "-1 $pairs_file_1 -2 $pairs_file_2 "
@@ -611,45 +599,41 @@ sub filter1 {
   print "Discarded $discard_count mates out of $read_count\n";
 }
 
-=head2 assemble_groups_velvet
+=head2 assemble_groups
 
- Title   : assemble_groups_velvet
- Usage   : $project->assemble_groups_velvet()
+ Title   : assemble_groups
+ Usage   : $project->assemble_groups()
  Function: Identifies groups of half-mapping read pairs that align to the reference genome at
            locations near one another, and performs a local assembly on the unaligned mates in each
-           group
+           group using Taipan
  Example : $project->bowtie_identify();
            $project->filter( 8 );
-           $project->assemble_groups_velvet( 250, 3, 13, 3 );
+           $project->assemble_groups( 250, 3, 16 );
  Returns : No return value
  Args    : Expected intron length for group identification, Minimum number of unaligned mates
            from half-mapping read pairs needed near one another to consider them to be a group,
-           Velvet hash length value, Velvet coverage cutoff value, path to file containing
-           half-mapping reads (optional)
+           path to file containing half-mapping reads (optional)
 
 =cut
 
-sub assemble_groups_velvet {
+sub assemble_groups {
   my $self                = shift;
   my $intron_length       = shift;
   my $num_aln             = shift;
-  my $hash_length         = shift;
-  my $cov_cutoff          = shift;
+  my $min_contig_length   = shift;
   my $halfmap_file        = shift || $self->{"halfmapping_file"};
   my $sorted_file         = $halfmap_file;
   $sorted_file            =~ s/(\.[^.]+)$/_sorted.sam/;
   my $work_dir            = $self->{"work_dir"};
-  my $velvet_dir          = $self->{"velvet_dir"};
   my $reads_basename      = $self->{"reads_basename"};
   my $frag_length         = $self->{"frag_length"};
-  my $velvet_data_dir     = "$work_dir/velvet-data";
+  my $assembly_dir        = $self->{"assembly_dir"};
   my $results_file        = "$work_dir/${reads_basename}_contigs.fa";
   $self->{"contigs_file"} = $results_file;
+  my $contigs_file_suffix = "_k${min_contig_length}_t1_o1.contigs";
   
   return if (-z $halfmap_file || !(-e $halfmap_file));
   print "Performing local assemblies...\n";
-
-  $velvet_dir =~ s!/*$!/! if ($velvet_dir ne ""); # Add trailing slash if not already present
   
   # Sort by alignment position
   capture( "sort -k3,3 -k8n,8 -o $sorted_file $halfmap_file" );
@@ -657,7 +641,7 @@ sub assemble_groups_velvet {
 
   # Get the groups one at a time
   my $ifh = IO::File->new( $sorted_file, 'r' ) or die "$0: $sorted_file: $!";
-  my $ofh2 = IO::File->new( $results_file, 'w' ) or die "$0: $results_file: $!";
+  my $ofh3 = IO::File->new( $results_file, 'w' ) or die "$0: $results_file: $!";
   my @groups = ();
   my $last_pos = 0;
   my $last_chr;
@@ -705,42 +689,40 @@ sub assemble_groups_velvet {
       $reversed = 0;
     }
 
-
-    # Run velveth on groups of 2 or more reads using stdout
+    # Assemble groups containing at least $num_aln reads
     if ( scalar(@groups) >= $num_aln ) {
-
-      # Open output file
       ++$count;
-      my $outfile = "$work_dir/velvet-data/${reads_basename}_group_$count.sam";
-      my $ofh = IO::File->new( $outfile, 'w' ) or die "$0: Can't open $outfile: $!";
-
+      my $samfile = "$work_dir/assembly/${reads_basename}_group$count.sam";
+      my $rawfile = "$work_dir/assembly/${reads_basename}_group$count.raw";
+      my $ofh = IO::File->new( $samfile, 'w' ) or die "$0: Can't open $samfile: $!";
+      my $ofh2 = IO::File->new( $rawfile, 'w' ) or die "$0: Can't open $rawfile: $!";
       while ( scalar(@groups) > 0 ) {
-        print $ofh shift(@groups);
+        my $ln = shift(@groups);
+        my @fields = split( /\t/, $ln );
+        print $ofh $ln; # Record the SAM alignment data to a SAM file for this group
+        print $ofh2 "$fields[9]\n"; # Record the raw read to a .raw file for this group
       }
       $ofh->close();
-      my $outdir = "$velvet_data_dir/group_${count}/";
-      capture( "${velvet_dir}velveth $outdir $hash_length -sam -short $outfile" );
-      die "$0: velveth exited unsuccessful" if ( $EXITVAL != 0 );
+      $ofh2->close();
 
-      # Run velvetg on groups
-      capture("${velvet_dir}velvetg $outdir -cov_cutoff $cov_cutoff");
-      die "$0: velvetg exited unsuccessful" if ( $EXITVAL != 0 );
+      capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 1" );
+      die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
-      if (!(-z "$outdir/contigs.fa")) {
-        # Append results to the multi-FastA output file
+      # Append this group's results to the multi-FastA output file containing all contigs
+      my $contigs_file = "${rawfile}${contigs_file_suffix}";
+      if (!(-z $contigs_file)) {
         $num_met_cutoff++;
-        my $ifh2 = IO::File->new( "$outdir/contigs.fa", 'r' ) or die "$0: $outdir/contigs.fa: $!";
+        my $ifh2 = IO::File->new( $contigs_file, 'r' ) or die "$0: Can't open $contigs_file: $!";
         while ( my $contig_line = $ifh2->getline ) {
           if ($contig_line =~ m/^>/) {
-            print $ofh2 ">Group_${count}_(${left_pos}-${last_pos})_" . substr($contig_line, 1);
+            print $ofh3 ">Group${count}(${left_pos}-${last_pos})|" . substr($contig_line, 1);
           } else {
-            print $ofh2 $contig_line;
+            print $ofh3 $contig_line;
           }
         }
         $ifh2->close;
       }
-    }
-    else {
+    } else {
       @groups = ();
     }
     $new_group = 1;
@@ -756,40 +738,40 @@ sub assemble_groups_velvet {
   
   # Handle the last group
   if ( scalar(@groups) >= $num_aln ) {
-    # Open output file
     ++$count;
-    my $outfile = "$work_dir/velvet-data/${reads_basename}_group_$count.sam";
-    my $ofh = IO::File->new( $outfile, 'w' ) or die "$0: Can't open $outfile: $!";
-  
+    my $samfile = "$work_dir/assembly/${reads_basename}_group$count.sam";
+    my $rawfile = "$work_dir/assembly/${reads_basename}_group$count.raw";
+    my $ofh = IO::File->new( $samfile, 'w' ) or die "$0: Can't open $samfile: $!";
+    my $ofh2 = IO::File->new( $rawfile, 'w' ) or die "$0: Can't open $rawfile: $!";
     while ( scalar(@groups) > 0 ) {
-      print $ofh shift(@groups);
+      my $ln = shift(@groups);
+      my @fields = split( /\t/, $ln );
+      print $ofh $ln; # Record the SAM alignment data to a SAM file for this group
+      print $ofh2 "$fields[9]\n"; # Record the raw read to a .raw file for this group
     }
     $ofh->close();
-    my $outdir = "$velvet_data_dir/group_${count}/";
-    capture( "${velvet_dir}velveth $outdir $hash_length -sam -short $outfile" );
-    die "$0: velveth exited unsuccessful" if ( $EXITVAL != 0 );
-  
-    # Run velvetg on groups
-    capture("${velvet_dir}velvetg $outdir -cov_cutoff $cov_cutoff");
-    die "$0: velvetg exited unsuccessful" if ( $EXITVAL != 0 );
-  
-    if (!(-z "$outdir/contigs.fa")) {
-      # Append results to the multi-FastA output file
+    $ofh2->close();
+
+    capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 1" );
+    die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
+
+    # Append this group's results to the multi-FastA output file containing all contigs
+    my $contigs_file = "${rawfile}${contigs_file_suffix}";
+    if (!(-z $contigs_file)) {
       $num_met_cutoff++;
-      my $ifh2 = IO::File->new( "$outdir/contigs.fa", 'r' ) or die "$0: $outdir/contigs.fa: $!";
+      my $ifh2 = IO::File->new( $contigs_file, 'r' ) or die "$0: Can't open $contigs_file: $!";
       while ( my $contig_line = $ifh2->getline ) {
         if ($contig_line =~ m/^>/) {
-          print $ofh2 ">Group_${count}_(${left_pos}-${last_pos})_" . substr($contig_line, 1);
+          print $ofh3 ">Group${count}(${left_pos}-${last_pos})|" . substr($contig_line, 1);
         } else {
-          print $ofh2 $contig_line;
+          print $ofh3 $contig_line;
         }
       }
       $ifh2->close;
     }
   }
-  $ofh2->close;
   print "Identified $count groups for assembly.\n";
-  print "Assembled $num_met_cutoff contigs meeting coverage cutoff.\n";
+  print "Successfully assembled $num_met_cutoff contigs.\n";
 }
 
 =head2 build_blast_index
@@ -843,7 +825,6 @@ sub align_groups() {
   my $contigs_file                  = shift || $self->{"contigs_file"};
   my $reads_basename                = $self->{"reads_basename"};
   my $ref_genome_basename           = $self->{"ref_genome"}->{"basename"};
-  my $blast_dir                     = $self->{"blast_dir"};
   my $index_dir                     = $self->{"index_dir"};
   my $work_dir                      = $self->{"work_dir"};
   my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned";
@@ -853,10 +834,8 @@ sub align_groups() {
   return if (-z $contigs_file || !(-e $contigs_file));
   print "Aligning assembled contigs to reference genome...\n";
   
-  $blast_dir =~ s!/*$!/! if ($blast_dir ne ""); # Add trailing slash if not already present
-  
   # Call Blast to run the mapping
-  capture( "${blast_dir}blastall -p blastn -d $index -i $contigs_file -o $output_file" );
+  capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file" );
   die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
   
   print "Results saved to $output_file\n";
