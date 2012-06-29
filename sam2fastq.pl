@@ -31,6 +31,10 @@ unless ( @ARGV ) {
 }
 my $input_file;
 GetOptions( "i=s" =>\$input_file ) || die "$0: Bad option";
+unless (defined $input_file) {
+  print "Usage: $0 -i sam_file\n";
+  exit;  
+}
 
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
 while ( my $line = $ifh->getline ) {
