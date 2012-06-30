@@ -128,7 +128,8 @@ $project->assemble_groups( $intron_length, $num_aln, $min_contig_length );
 ALIGNMENT:
 print "Running ALIGNMENT...\n";
 $project->build_blast_index( $index_dir );
-$project->align_groups();
+$project->align_groups_blast();
+$project->align_groups_clustal();
 
 #ANALYSIS:
 

@@ -806,28 +806,28 @@ sub build_blast_index() {
   }
 }
 
-=head2 align_groups
+=head2 align_groups_blast
 
- Title   : align_groups
- Usage   : $project->align_groups()
+ Title   : align_groups_blast
+ Usage   : $project->align_groups_blast()
  Function: Aligns contigs assembled from half-mapping reads
  Example : $project->bowtie_identify();
            $project->filter( 8 );
            $project->assemble_groups( 250, 3 );
-           $project->align_groups();
+           $project->align_groups_blast();
  Returns : No return value
  Args    : Path to multi-FastA format file containing contigs for alignment (optional)
 
 =cut
 
-sub align_groups() {
+sub align_groups_blast() {
   my $self                          = shift;
   my $contigs_file                  = shift || $self->{"contigs_file"};
-  my $reads_basename                = $self->{"reads_basename"};
-  my $ref_genome_basename           = $self->{"ref_genome"}->{"basename"};
   my $index_dir                     = $self->{"index_dir"};
   my $work_dir                      = $self->{"work_dir"};
-  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned";
+  my $reads_basename                = $self->{"reads_basename"};
+  my $ref_genome_basename           = $self->{"ref_genome"}->{"basename"};
+  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned_blast";
   my $index                         = "$index_dir/${ref_genome_basename}";
   $self->{"contigs_alignment_file"} = $output_file;
 
@@ -841,6 +841,43 @@ sub align_groups() {
   print "Results saved to $output_file\n";
 }
 
+=head2 align_groups_clustal
+
+ Title   : align_groups_clustal
+ Usage   : $project->align_groups_clustal()
+ Function: Aligns contigs assembled from half-mapping reads
+ Example : $project->bowtie_identify();
+           $project->filter( 8 );
+           $project->assemble_groups( 250, 3 );
+           $project->align_groups_clustal();
+ Returns : No return value
+ Args    : Path to multi-FastA format file containing contigs for alignment (optional)
+
+=cut
+
+sub align_groups_clustal() {
+  my $self                          = shift;
+  my $contigs_file                  = shift || $self->{"contigs_file"};
+  my $reads_basename                = $self->{"reads_basename"};
+  my $ref_genome                    = $self->{"ref_genome"}->{"full_pathname"};
+  my $work_dir                      = $self->{"work_dir"};
+  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned_clustal";
+  $self->{"contigs_alignment_file"} = $output_file;
+  my $clustal_input_file            = "$work_dir/${reads_basename}_pre-alignment";
+
+  return if (-z $contigs_file || !(-e $contigs_file));
+  print "Aligning assembled contigs to reference genome...\n";
+  
+  # Append reference genome file to assembled contigs for multiple sequence alignment
+  capture( "cat $contigs_file $ref_genome > $clustal_input_file");
+  die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
+  
+  # Call Clustal to run the mapping
+  capture( "clustalw -infile=$clustal_input_file -gapopen=50 -gapext=0.01 -outfile=$output_file" );
+  die "$0: clustalw exited unsuccessful" if ( $EXITVAL != 0 );
+  
+  print "Results saved to $output_file\n";
+}
 
 ############ Subroutines for internal use by this module ############
 

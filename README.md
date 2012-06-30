@@ -17,11 +17,11 @@ Install project code:
 
 ## EXTERNAL DEPENDENCIES
 
-1. [Blast](http://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Web&PAGE_TYPE=BlastDocs&DOC_TYPE=Download)
+1. [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
 
-2. [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
+2. [Clustalw](www.ebi.ac.uk/Tools/msa/clustalw2/)
 
-3. [Velvet](http://www.ebi.ac.uk/~zerbino/velvet/)
+3. [Taipan](http://sourceforge.net/projects/taipan/)
 
 ## RUNNING
 
