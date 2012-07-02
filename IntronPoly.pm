@@ -142,7 +142,9 @@ sub mapping_setup {
   my $ref_genome_basename  = $self->{"ref_genome"}->{"basename"};
   my $ref_genome_dir       = $self->{"ref_genome"}->{"dir"};
   die "$0: reference genome directory $ref_genome_dir does not exist" unless ( -d $ref_genome_dir );
-
+  
+  print "Validating Fasta reference genome data...\n";
+  
   # Perform basic validation on reference genome
   capture("${scripts_dir}validate_fasta.pl -i $ref_genome");
   die "$0: validate_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
@@ -154,6 +156,8 @@ sub mapping_setup {
   die "$0: reads file $reads_file_one does not exist" unless ( -e $reads_file_one );
   die "$0: reads file $reads_file_two does not exist" unless ( -e $reads_file_two );
 
+  print "Validating Fastq read pair data...\n";
+  
   # Perform basic validation on read pairs files
   capture("${scripts_dir}validate_fastq.pl -i $reads_dir/$reads_basename");
   die "$0: validate_fastq.pl exited unsuccessful" if ( $EXITVAL != 0 );
@@ -273,10 +277,11 @@ sub bowtie_identify {
   my $reads_basename          = $self->{"reads_basename"};
   my $scripts_dir             = $self->{"scripts_dir"};
   my $work_dir                = $self->{"work_dir"};
-  my $outfile                 = "$work_dir/${reads_basename}_halfmapping.sam";
-  my $outfile2                = $outfile;
-  $outfile2                   =~ s/(\.[^.]+)$/_sorted.sam/;
-  $self->{"halfmapping_file"} = $outfile;
+  my $outfile                 = "$work_dir/${reads_basename}_halfm_pairs.sam";
+  my $outfile2                = "$work_dir/${reads_basename}_halfm_unal_mates.sam";
+  my $outfile3                = $outfile;
+  $outfile3                   =~ s/(\.[^.]+)$/_sorted.sam/;
+  $self->{"halfmapping_file"} = $outfile2;
   
   if (!-e $alignment_file) {
     print STDERR "Alignment file not found.\n";
@@ -296,6 +301,7 @@ sub bowtie_identify {
   
   my $ifh  = IO::File->new( $alignment_file, 'r' ) or die "Can't open $alignment_file: $!";
   my $ofh  = IO::File->new( $outfile, 'w' ) or die "Can't create $outfile: $!";
+  my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "Can't create $outfile2: $!";
   my $prev_id         = "";
   my $discard_this_id = 0;
   my $mapping         = 0;
@@ -312,7 +318,6 @@ sub bowtie_identify {
       # This line is the first line with a new read ID
       if ( scalar @print_lines == 2 && $mapping == 1 && $prev_id ne "" ) {
 
-        # Check if the pair is discordant
         my $line1  = shift(@print_lines);
         my @fd1    = split( /\t/, $line1 );
         my $flags1 = $fd1[1];
@@ -322,6 +327,11 @@ sub bowtie_identify {
 
         # Print the half-mapping mate pairs with the last line's ID
         print $ofh "$line1$line2";
+        if (&_isUnalignedMate($flags1)) {
+          print $ofh2 $line1;
+        } else {
+          print $ofh2 $line2;
+        }
         $count++;
       }
 
@@ -384,7 +394,7 @@ sub bowtie_identify {
   }
   print "Saved $count half-mapping read pair alignments to $outfile\n";
   print "Sorting...\n";
-  capture( "sort -k3,3 -k8n,8 -o $outfile2 $outfile" );
+  capture( "sort -k3,3 -k8n,8 -o $outfile3 $outfile" );
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
 }
 
@@ -832,13 +842,13 @@ sub align_groups_blast() {
   $self->{"contigs_alignment_file"} = $output_file;
 
   return if (-z $contigs_file || !(-e $contigs_file));
-  print "Aligning assembled contigs to reference genome...\n";
+  print "Aligning assembled contigs to reference genome using Blast...\n";
   
   # Call Blast to run the mapping
   capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file" );
   die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
   
-  print "Results saved to $output_file\n";
+  print "Alignment results saved to $output_file\n";
 }
 
 =head2 align_groups_clustal
@@ -866,7 +876,7 @@ sub align_groups_clustal() {
   my $clustal_input_file            = "$work_dir/${reads_basename}_pre-alignment";
 
   return if (-z $contigs_file || !(-e $contigs_file));
-  print "Aligning assembled contigs to reference genome...\n";
+  print "Aligning assembled contigs to reference genome using Clustal...\n";
   
   # Append reference genome file to assembled contigs for multiple sequence alignment
   capture( "cat $contigs_file $ref_genome > $clustal_input_file");
@@ -876,7 +886,7 @@ sub align_groups_clustal() {
   capture( "clustalw -infile=$clustal_input_file -gapopen=50 -gapext=0.01 -outfile=$output_file" );
   die "$0: clustalw exited unsuccessful" if ( $EXITVAL != 0 );
   
-  print "Results saved to $output_file\n";
+  print "Alignment results saved to $output_file\n";
 }
 
 ############ Subroutines for internal use by this module ############
