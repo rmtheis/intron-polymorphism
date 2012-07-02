@@ -30,12 +30,19 @@ use IO::File;
 # to the input files.
 #
 
+my $usage_msg = "Performs basic validation on a Fastq file.\n"
+              . "Usage: validate_fastq.pl -i fastq_file_basename\n"
+              . "(Basename is filename without '_1.fq' or '_2.fq' extension)\n";
 unless ( @ARGV ) {
-  print "Usage: $0 -i mate_file_basename\n";
+  print $usage_msg;
   exit;
 }
 my $base_name;
 GetOptions( "i=s" =>\$base_name );
+unless ( defined $base_name ) {
+  print $usage_msg;
+  exit;  
+}
 
 my $input_file_1 = $base_name . "_1.fq";
 my $input_file_2 = $base_name . "_2.fq";

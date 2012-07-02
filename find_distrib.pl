@@ -24,19 +24,24 @@ use IO::File;
 # Bins the half-mapping reads in a SAM file.
 #
 
+my $usage_msg = "Bins distribution of half-mapping alignments along reported positions.\n"
+              . "Usage: find_distrib.pl -i sam_file [-b bin_size (default: 100)]\n";
 unless ( @ARGV ) {
-  print "Usage: $0 -i input_file\n";
+  print $usage_msg;
   exit;
 }
-my $aligned;
-my $infile;
-GetOptions(
-  #'a' => \$aligned, # Optional flag for also reporting binned read depth for aligning reads.
-  'i:s' => \$infile # SAM input file
-) || die "$0: Bad option";
-
-my $ifh = IO::File->new( $infile, 'r' ) or die "Can't open $infile: $!";
+my ( $aligned, $input_file );
 my $bin_size = 100;
+GetOptions(
+  'b:i' => \$bin_size,
+  'i:s' => \$input_file # SAM input file
+) || die "$0: Bad option";
+unless ( defined $input_file ) {
+  print $usage_msg;
+  exit;  
+}
+
+my $ifh = IO::File->new( $input_file, 'r' ) or die "Can't open $input_file: $!";
 my %fragments = ();
 while ( my $line1 = $ifh->getline ) {
   next if $line1 =~ m/^@/;

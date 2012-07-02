@@ -22,12 +22,18 @@ use IO::File;
 # Performs basic validation on files in FastA format.
 #
 
+my $usage_msg = "Performs basic validation on a Fasta file.\n"
+              . "Usage: validate_fasta.pl -i fasta_file\n";
 unless ( @ARGV ) {
-  print "Usage: $0 -i fasta_file\n";
+  print $usage_msg;
   exit;
 }
 my $input_file;
 GetOptions( "i=s" =>\$input_file );
+unless ( defined $input_file ) {
+  print $usage_msg;
+  exit;
+}
 
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
 

@@ -22,18 +22,23 @@ use IO::File;
 # Infers fragment length by building a distribution from alignments in a SAM file.
 #
 
+my $usage_msg = "Infers fragment length from SAM format alignments.\n"
+              . "Usage: infer_fraglen.pl -i sam_file [-m]\n";
 unless ( @ARGV ) {
-  print "Usage: $0 -i input_file {-m}\n";
+  print $usage_msg;
   exit;
 }
-my $infile;
-my $median;
+my ( $input_file, $median );
 GetOptions(
-  'i:s' => \$infile, # SAM input file
+  'i:s' => \$input_file, # SAM input file
   'm' => \$median # Optional flag for reporting only median fragment length. Default: binned output
 ) || die "$0: Bad option";
+unless ( defined $input_file ) {
+  print $usage_msg;
+  exit;
+}
 
-my $ifh = IO::File->new( $infile, 'r' ) or die "Can't open $infile: $!";
+my $ifh = IO::File->new( $input_file, 'r' ) or die "Can't open $input_file: $!";
 my $bin_size = 10;
 my %fragments = ();
 while ( my $line1 = $ifh->getline ) {

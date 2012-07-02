@@ -22,17 +22,20 @@ use IO::File;
 #
 # Converts a SAM format file to Fastq format.
 #
-# Output is printed to standard out. Unaligned reads and secondary alignments are ignored.
+# Unaligned reads and secondary alignments are ignored. Output is printed to standard out.
 #
 
+my $usage_msg =
+  "Converts a SAM format file to Fastq format, ignoring unaligned reads and secondary alignments.\n"
+  . "Usage: sam2fastq.pl -i sam_file > output.sam\n";
 unless ( @ARGV ) {
-  print "Usage: $0 -i fastq_file\n";
+  print $usage_msg;
   exit;
 }
 my $input_file;
 GetOptions( "i=s" =>\$input_file ) || die "$0: Bad option";
-unless (defined $input_file) {
-  print "Usage: $0 -i sam_file\n";
+unless ( defined $input_file ) {
+  print $usage_msg;
   exit;  
 }
 

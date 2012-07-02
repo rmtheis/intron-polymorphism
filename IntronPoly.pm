@@ -578,9 +578,9 @@ sub filter1 {
         ($id, $pos) = ($fields[0], $fields[3]);
       }
 
-      print $ofh2 "\nFAKE PAIR ALIGNMENT LINE 1: $fake_line"         if DEBUG;
-      print $ofh2 "ORIGINAL HALF-MAPPING PAIR UNALIGNED MATE: $line" if DEBUG;
-      print $ofh2 "ORIG_POS: $other_mate_pos POS: $pos\n"            if DEBUG;
+      print $ofh2 "\nFake pair alignment line 1: $fake_line"         if DEBUG;
+      print $ofh2 "Original half-mapping pair unaligned mate: $line" if DEBUG;
+      print $ofh2 "orig_pos: $other_mate_pos POS: $pos\n"            if DEBUG;
 
       # Discard fake pairs that align close to the originally aligning mate in the half-mapping read pair
       if (

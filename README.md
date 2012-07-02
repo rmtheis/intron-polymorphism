@@ -14,19 +14,23 @@ Install required Perl modules:
 Install project code:
 
     git clone git://github.com/rmtheis/intron-polymorphism.git
+    chmod +x intron-polymorphism/*.pl
 
 ## EXTERNAL DEPENDENCIES
 
+The following packages must be installed and accessible from the command line:
+
 1. [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
 
-2. [Clustalw](www.ebi.ac.uk/Tools/msa/clustalw2/)
+2. [ClustalW](www.ebi.ac.uk/Tools/msa/clustalw2/)
 
 3. [Taipan](http://sourceforge.net/projects/taipan/)
 
 ## RUNNING
 
     cd intron-polymorphism
-    ./ip_handler.pl
+    ./ip_handler.pl -rd /reads/dir/ -b reads_basename -g /path/to/ref_genome.fa 1> run.output 2>&1 &
+    tail -f run.output
 
 ## LICENSE
 
