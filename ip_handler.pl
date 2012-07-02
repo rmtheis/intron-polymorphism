@@ -71,6 +71,12 @@ $existing_halfmapping_file = $existing_halfmapping_file || "";
 $skip_to = $skip_to || "";
 $num_threads = $num_threads || Sys::CPU::cpu_count();
 
+# Resolve relative pathnames
+$reads_basename =~ s/^~/$ENV{HOME}/;
+$ref_genome_file =~ s/^~/$ENV{HOME}/;
+$existing_alignment_file =~ s/^~/$ENV{HOME}/;
+$existing_halfmapping_file =~ s/^~/$ENV{HOME}/;
+
 # Initialize the project
 my $project = IntronPoly->new();
 
@@ -107,8 +113,8 @@ COLLECTION:
 $project->bowtie_identify( $existing_alignment_file );
 
 FILTERING:
-$project->create_fake_pairs( $existing_alignment_file, $existing_halfmapping_file );
-$project->run_fake_pairs_alignment( $num_threads );
+$project->create_simulated_pairs( $existing_alignment_file, $existing_halfmapping_file );
+$project->align_simulated_pairs( $num_threads );
 $project->filter1();
 
 ASSEMBLY:

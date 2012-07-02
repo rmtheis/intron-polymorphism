@@ -21,7 +21,7 @@ use File::Basename;
 use IO::File;
 use IPC::System::Simple qw(capture $EXITVAL);
 
-use constant DEBUG => (1);    # Flag to print info for debugging (temporary)
+use constant DEBUG => (0);    # Flag to print info for debugging
 
 =head2 new
 
@@ -404,22 +404,22 @@ sub bowtie_identify {
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
 }
 
-=head2 create_fake_pairs
+=head2 create_simulated_pairs
 
- Title   : create_fake_pairs
- Usage   : $project->create_fake_pairs()
+ Title   : create_simulated_pairs
+ Usage   : $project->create_simulated_pairs()
  Function: Create simulated paired-end reads from the outer portions of non-aligning mate sequences,
            using the half-mapping read pairs as a starting point
  Example : $project->run_bowtie_mapping( 8, 100, 500 );
            $project->bowtie_identify();
-           $project->create_fake_pairs();
+           $project->create_simulated_pairs();
  Returns : No return value
  Args    : Scalar path to SAM format alignment file (optional), scalar path to SAM half-mapping
            alignment file (optional). Note: Specifying arg 2 requires arg 1
 
 =cut
 
-sub create_fake_pairs {
+sub create_simulated_pairs {
   my $self           = shift;
   my $alignment_file = shift || $self->{"alignment_file"};
   my $infile         = shift || $self->{"halfmapping_file"};
@@ -427,15 +427,15 @@ sub create_fake_pairs {
   my $reads_basename = $self->{"reads"}->{"basename"};
   my $scripts_dir    = $self->{"scripts_dir"};
   my $frag_length    = $self->{"frag_length"};
-  my $outfile1       = "$work_dir/${reads_basename}_fake_pairs_1.fq";
-  my $outfile2       = "$work_dir/${reads_basename}_fake_pairs_2.fq";
-  $self->{"fake_pairs_file_1"} = $outfile1;
-  $self->{"fake_pairs_file_2"} = $outfile2;
+  my $outfile1       = "$work_dir/${reads_basename}_sim_pairs_1.fq";
+  my $outfile2       = "$work_dir/${reads_basename}_sim_pairs_2.fq";
+  $self->{"sim_pairs_file_1"} = $outfile1;
+  $self->{"sim_pairs_file_2"} = $outfile2;
   
   return if (-z $infile || !(-e $infile));
   print "Creating simulated paired-end reads...\n";
 
-  # Define length of each mate for the fake read pairs
+  # Define length of each mate for the simulated read pairs
   my $mate_length = 16;
 
   # Make sure we have computed the fragment length
@@ -448,13 +448,13 @@ sub create_fake_pairs {
   # Boolean to track whether we have any half-mapping pairs
   my $have_candidates = 0;
 
-  # Get the mates we want and write them as fake paired-end reads to FastQ
+  # Get the mates we want and write them as simulated paired-end reads to FastQ
   while ( my $line = $ifh->getline ) {
     next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
     my ($id, $flags, $sequence, $quality_scores) = ($fields[0], $fields[1], $fields[9], $fields[10]);
 
-    # Create a fake pair from the unaligned mate in the pair
+    # Simulate a read pair from the unaligned mate in the pair
     if ( &_isUnalignedMate($flags) ) {
 
       # Set a flag indicating that we got at least one half-mapping pair
@@ -465,7 +465,7 @@ sub create_fake_pairs {
         $sequence = &_reverseComplement($sequence);
       }
 
-      # Create the fake mates. Mate 2 gets reverse complemented.
+      # Create the simulated mates. Mate 2 gets reverse complemented.
       my $mate_1 = substr( $sequence, 0, $mate_length );
       my $mate_2 =
         &_reverseComplement( substr( $sequence, -1 * $mate_length ) );
@@ -473,7 +473,7 @@ sub create_fake_pairs {
       my $quality_scores_2 =
         scalar reverse substr( $quality_scores, -1 * $mate_length );
 
-      # Write the fake mates
+      # Write the simulated mates
       print $ofh1 "\@$id\/1\n$mate_1\n+\n$quality_scores_1\n";
       print $ofh2 "\@$id\/2\n$mate_2\n+\n$quality_scores_2\n";
     }
@@ -485,34 +485,34 @@ sub create_fake_pairs {
   print STDERR "No half-mapping read pairs found.\n" if ( !$have_candidates );
 }
 
-=head2 run_fake_pairs_alignment
+=head2 align_simulated_pairs
 
- Title   : run_fake_pairs_alignment
- Usage   : $project->run_fake_pairs_alignment( $num_threads )
+ Title   : align_simulated_pairs
+ Usage   : $project->align_simulated_pairs( $num_threads )
  Function: Aligns simulated read pairs to the reference genome.
  Example : $project->bowtie_identify();
-           $project->run_fake_pairs_alignment( 8 );
+           $project->align_simulated_pairs( 8 );
  Returns : No return value
  Args    : Number of parallel search threads to use for Bowtie
 
 =cut
 
-sub run_fake_pairs_alignment {
+sub align_simulated_pairs {
   my $self                = shift;
   my $num_threads         = shift;
-  my $pairs_file_1        = shift || $self->{"fake_pairs_file_1"};
-  my $pairs_file_2        = shift || $self->{"fake_pairs_file_2"};
+  my $pairs_file_1        = shift || $self->{"sim_pairs_file_1"};
+  my $pairs_file_2        = shift || $self->{"sim_pairs_file_2"};
   my $work_dir            = $self->{"work_dir"};
   my $reads_basename      = $self->{"reads"}->{"basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $index_dir           = $self->{"index_dir"};
-  my $outfile             = "$work_dir/${reads_basename}_fake_pairs_alignment.sam";
+  my $outfile             = "$work_dir/${reads_basename}_sim_pairs_alignment.sam";
   $self->{"realignment_file"} = $outfile;
   
   return if (-z $pairs_file_1 || !(-e $pairs_file_1));
   print "Aligning simulated paired-end reads...\n";
   
-  # Run Bowtie with the fake read pairs as input
+  # Run Bowtie with the simulated read pairs as input
   capture(
         "bowtie2 -x $index_dir/$ref_genome_basename "
       . "--threads $num_threads --reorder --no-hd "
@@ -530,7 +530,7 @@ sub run_fake_pairs_alignment {
  Function: Creates a filtered list of alignments, removing half-mapping read pairs whose unaligned
            mates were successfully aligned to the reference genome using relaxed mapping criteria
  Example : $project->bowtie_identify();
-           $project->run_fake_pairs_alignment( 8 );
+           $project->align_simulated_pairs( 8 );
            $project->filter1();
  Returns : No return value
  Args    : Path to file containing alignments from a secondary run of Bowtie using relaxed criteria
@@ -544,7 +544,7 @@ sub filter1 {
   my $work_dir            = $self->{"work_dir"};
   my $reads_basename      = $self->{"reads"}->{"basename"};
   my $frag_length         = $self->{"frag_length"};
-  my $debug_file          = "$work_dir/${reads_basename}_fake_pairs_alignment.debug" if DEBUG;
+  my $debug_file          = "$work_dir/${reads_basename}_sim_pairs_alignment.debug" if DEBUG;
   my $outfile             = "$work_dir/${reads_basename}_filtered.sam";
 
   # Save the filtered results in the place of the half-mapping alignment file
@@ -572,23 +572,23 @@ sub filter1 {
     next if !&_isUnalignedMate($orig_flags);
     $read_count++;
 
-    # Get the corresponding alignment from the fake pairs
-    my $fake_line;
-    while ( $fake_line = $ifh1->getline ) {
-      next if $fake_line =~ m/^@/;
-      my @fields = split( /\t/, $fake_line );
+    # Get the corresponding alignment from the simulated pairs
+    my $sim_line;
+    while ( $sim_line = $ifh1->getline ) {
+      next if $sim_line =~ m/^@/;
+      my @fields = split( /\t/, $sim_line );
       my ($id, $pos) = ($fields[0], $fields[3]);
       while ( $id ne $orig_id ) {
-        $fake_line = $ifh1->getline;
-        my @fields = split( /\t/, $fake_line );
+        $sim_line  = $ifh1->getline;
+        my @fields = split( /\t/, $sim_line );
         ($id, $pos) = ($fields[0], $fields[3]);
       }
 
-      print $ofh2 "\nFake pair alignment line 1: $fake_line"         if DEBUG;
+      print $ofh2 "Simulated pair alignment line 1: $sim_line"       if DEBUG;
       print $ofh2 "Original half-mapping pair unaligned mate: $line" if DEBUG;
-      print $ofh2 "orig_pos: $other_mate_pos POS: $pos\n"            if DEBUG;
+      print $ofh2 "orig_pos: $other_mate_pos POS: $pos\n\n"          if DEBUG;
 
-      # Discard fake pairs that align close to the originally aligning mate in the half-mapping read pair
+      # Discard simulated pairs that align close to the originally aligning mate in the half-mapping read pair
       if (
         $pos != 0
         && ( $pos < ( $other_mate_pos + $frag_length + 10 )
@@ -718,8 +718,8 @@ sub assemble_groups {
         print $ofh $ln; # Record the SAM alignment data to a SAM file for this group
         print $ofh2 "$fields[9]\n"; # Record the raw read to a .raw file for this group
       }
-      $ofh->close();
-      $ofh2->close();
+      $ofh->close;
+      $ofh2->close;
 
       capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 1" );
       die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
@@ -765,8 +765,8 @@ sub assemble_groups {
       print $ofh $ln; # Record the SAM alignment data to a SAM file for this group
       print $ofh2 "$fields[9]\n"; # Record the raw read to a .raw file for this group
     }
-    $ofh->close();
-    $ofh2->close();
+    $ofh->close;
+    $ofh2->close;
 
     capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 1" );
     die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
