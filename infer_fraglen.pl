@@ -23,13 +23,15 @@ use IO::File;
 #
 
 my $usage_msg = "Infers fragment length from SAM format alignments.\n"
-              . "Usage: infer_fraglen.pl -i sam_file [-m]\n";
+              . "Usage: infer_fraglen.pl -i sam_file [-b bin_size (Default: 10)] [-m (Median)]\n";
 unless ( @ARGV ) {
   print $usage_msg;
   exit;
 }
+my $bin_size = 10;
 my ( $input_file, $median );
 GetOptions(
+  'b:i' => \$bin_size,
   'i:s' => \$input_file, # SAM input file
   'm' => \$median # Optional flag for reporting only median fragment length. Default: binned output
 ) || die "$0: Bad option";
@@ -39,7 +41,6 @@ unless ( defined $input_file ) {
 }
 
 my $ifh = IO::File->new( $input_file, 'r' ) or die "Can't open $input_file: $!";
-my $bin_size = 10;
 my %fragments = ();
 while ( my $line1 = $ifh->getline ) {
   next if $line1 =~ m/^@/;
