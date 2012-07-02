@@ -105,13 +105,19 @@ sub build_db {
   my $reads_basename       = shift;
 
   # Use the base of the read pairs filenames for saving data throughout pipeline
-  $self->{"reads_basename"} = $reads_basename;
-
+  {
+    my ( $file, $dir, $ext ) = fileparse( $reads_basename, qr/\.[^.]*/ );
+    $self->{"reads"}->{"basename"} = $file;
+    $self->{"reads"}->{"dir"}      = $dir;
+  }
+  
   # Split reference genome pathname into components
-  my ( $file, $dir, $ext ) = fileparse( $ref_genome_filename, qr/\.[^.]*/ );
-  $self->{"ref_genome"}->{"full_pathname"} = $ref_genome_filename;
-  $self->{"ref_genome"}->{"basename"}      = $file;
-  $self->{"ref_genome"}->{"dir"}           = $dir;
+  {
+    my ( $file, $dir, $ext ) = fileparse( $ref_genome_filename, qr/\.[^.]*/ );
+    $self->{"ref_genome"}->{"full_pathname"} = $ref_genome_filename;
+    $self->{"ref_genome"}->{"basename"}      = $file;
+    $self->{"ref_genome"}->{"dir"}           = $dir;
+  }
 }
 
 =head2 mapping_setup
@@ -134,13 +140,13 @@ sub build_db {
 sub mapping_setup {
   my $self                 = shift;
   my $index_dir            = shift;
-  my $reads_dir            = shift;
-  my $reads_basename       = shift;
   my $scripts_dir          = $self->{"scripts_dir"};
   my $work_dir             = $self->{"work_dir"};
   my $ref_genome           = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename  = $self->{"ref_genome"}->{"basename"};
   my $ref_genome_dir       = $self->{"ref_genome"}->{"dir"};
+  my $reads_dir            = $self->{"reads"}->{"dir"};
+  my $reads_basename       = $self->{"reads"}->{"basename"};
   die "$0: reference genome directory $ref_genome_dir does not exist" unless ( -d $ref_genome_dir );
   
   print "Validating Fasta reference genome data...\n";
@@ -150,16 +156,16 @@ sub mapping_setup {
   die "$0: validate_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Ensure that read pairs files exist
-  $reads_dir = $1 if ( $reads_dir =~ /(.*)\/$/ );
-  my $reads_file_one = "$reads_dir/${reads_basename}_1.fq";
-  my $reads_file_two = "$reads_dir/${reads_basename}_2.fq";
+  $reads_dir =~ s!/*$!/! if ($reads_dir ne ""); # Add trailing slash if not already present
+  my $reads_file_one = "${reads_dir}${reads_basename}_1.fq";
+  my $reads_file_two = "${reads_dir}${reads_basename}_2.fq";
   die "$0: reads file $reads_file_one does not exist" unless ( -e $reads_file_one );
   die "$0: reads file $reads_file_two does not exist" unless ( -e $reads_file_two );
 
   print "Validating Fastq read pair data...\n";
   
   # Perform basic validation on read pairs files
-  capture("${scripts_dir}validate_fastq.pl -i $reads_dir/$reads_basename");
+  capture("${scripts_dir}validate_fastq.pl -i ${reads_dir}$reads_basename");
   die "$0: validate_fastq.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Create directory for Bowtie index files if necessary
@@ -234,7 +240,7 @@ sub run_bowtie_mapping {
   my $num_threads           = shift;
   my $minins                = shift;
   my $maxins                = shift;
-  my $reads_basename        = $self->{"reads_basename"};
+  my $reads_basename        = $self->{"reads"}->{"basename"};
   my $ref_genome_basename   = $self->{"ref_genome"}->{"basename"};
   my $index_dir             = $self->{"index_dir"};
   my $reads_file_one        = $self->{"bowtie_db"}->{"reads_file_one"};
@@ -274,7 +280,7 @@ sub run_bowtie_mapping {
 sub bowtie_identify {
   my $self                    = shift;
   my $alignment_file          = shift || $self->{"alignment_file"};
-  my $reads_basename          = $self->{"reads_basename"};
+  my $reads_basename          = $self->{"reads"}->{"basename"};
   my $scripts_dir             = $self->{"scripts_dir"};
   my $work_dir                = $self->{"work_dir"};
   my $outfile                 = "$work_dir/${reads_basename}_halfm_pairs.sam";
@@ -418,7 +424,7 @@ sub create_fake_pairs {
   my $alignment_file = shift || $self->{"alignment_file"};
   my $infile         = shift || $self->{"halfmapping_file"};
   my $work_dir       = $self->{"work_dir"};
-  my $reads_basename = $self->{"reads_basename"};
+  my $reads_basename = $self->{"reads"}->{"basename"};
   my $scripts_dir    = $self->{"scripts_dir"};
   my $frag_length    = $self->{"frag_length"};
   my $outfile1       = "$work_dir/${reads_basename}_fake_pairs_1.fq";
@@ -497,7 +503,7 @@ sub run_fake_pairs_alignment {
   my $pairs_file_1        = shift || $self->{"fake_pairs_file_1"};
   my $pairs_file_2        = shift || $self->{"fake_pairs_file_2"};
   my $work_dir            = $self->{"work_dir"};
-  my $reads_basename      = $self->{"reads_basename"};
+  my $reads_basename      = $self->{"reads"}->{"basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $index_dir           = $self->{"index_dir"};
   my $outfile             = "$work_dir/${reads_basename}_fake_pairs_alignment.sam";
@@ -536,7 +542,7 @@ sub filter1 {
   my $realignment_file    = shift || $self->{"realignment_file"};
   my $infile              = shift || $self->{"halfmapping_file"};
   my $work_dir            = $self->{"work_dir"};
-  my $reads_basename      = $self->{"reads_basename"};
+  my $reads_basename      = $self->{"reads"}->{"basename"};
   my $frag_length         = $self->{"frag_length"};
   my $debug_file          = "$work_dir/${reads_basename}_fake_pairs_alignment.debug" if DEBUG;
   my $outfile             = "$work_dir/${reads_basename}_filtered.sam";
@@ -635,7 +641,7 @@ sub assemble_groups {
   my $sorted_file         = $halfmap_file;
   $sorted_file            =~ s/(\.[^.]+)$/_sorted.sam/;
   my $work_dir            = $self->{"work_dir"};
-  my $reads_basename      = $self->{"reads_basename"};
+  my $reads_basename      = $self->{"reads"}->{"basename"};
   my $frag_length         = $self->{"frag_length"};
   my $assembly_dir        = $self->{"assembly_dir"};
   my $results_file        = "$work_dir/${reads_basename}_contigs.fa";
@@ -800,7 +806,7 @@ sub build_blast_index() {
   my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $index_dir           = $self->{"index_dir"};
-  my $reads_basename      = $self->{"reads_basename"};
+  my $reads_basename      = $self->{"reads"}->{"basename"};
   unless ( -e "$index_dir/$ref_genome_basename.nhr"
     && "$index_dir/$ref_genome_basename.nin"
     && "$index_dir/$ref_genome_basename.nsq" )
@@ -835,7 +841,7 @@ sub align_groups_blast() {
   my $contigs_file                  = shift || $self->{"contigs_file"};
   my $index_dir                     = $self->{"index_dir"};
   my $work_dir                      = $self->{"work_dir"};
-  my $reads_basename                = $self->{"reads_basename"};
+  my $reads_basename                = $self->{"reads"}->{"basename"};
   my $ref_genome_basename           = $self->{"ref_genome"}->{"basename"};
   my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned_blast";
   my $index                         = "$index_dir/${ref_genome_basename}";
@@ -868,7 +874,7 @@ sub align_groups_blast() {
 sub align_groups_clustal() {
   my $self                          = shift;
   my $contigs_file                  = shift || $self->{"contigs_file"};
-  my $reads_basename                = $self->{"reads_basename"};
+  my $reads_basename                = $self->{"reads"}->{"basename"};
   my $ref_genome                    = $self->{"ref_genome"}->{"full_pathname"};
   my $work_dir                      = $self->{"work_dir"};
   my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned_clustal";

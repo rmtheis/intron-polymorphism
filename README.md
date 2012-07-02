@@ -29,7 +29,7 @@ The following packages must be installed and accessible from the command line:
 ## RUNNING
 
     cd intron-polymorphism
-    ./ip_handler.pl -rd /reads/dir/ -b reads_basename -g /path/to/ref_genome.fa 1> run.output 2>&1 &
+    ./ip_handler.pl -b reads_basename -g ref_genome.fa 1> run.output 2>&1 &
     tail -f run.output
 
 ## LICENSE

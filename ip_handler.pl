@@ -25,8 +25,7 @@ use Sys::CPU;
 ##################################
 
 my $ref_genome_file = undef;            # Reference genome (FastA format)
-my $reads_dir = undef;                  # Directory containing read pairs
-my $reads_basename = "m5";             # Read pairs base name, without "_1.fq" or "_2.fq" extension (FastQ format)
+my $reads_basename = "m5";             # Read pairs pathname, without "_1.fq" or "_2.fq" extension (FastQ format)
 my $minins = undef;                     # Bowtie -I/--minins <int> value
 my $maxins = undef;                     # Bowtie -X/--maxins <int> value
 my $intron_length = undef;              # Expected intron length for assembly
@@ -55,13 +54,11 @@ GetOptions(
   'max:i' => \$maxins,
   'min:i' => \$minins,
   'n:i' => \$num_aln,
-  'rd:s' => \$reads_dir,
   't:s' => \$num_threads,
 ) || die "$0: Bad option";
 
 # Use defaults for undefined values
-$ref_genome_file = $ref_genome_file || $ENV{HOME} . "/intron-polymorphism/testdata/m_chr1.fa";
-$reads_dir = $reads_dir || $ENV{HOME} . "/intron-polymorphism/testdata";
+$ref_genome_file = $ref_genome_file || "testdata/m_chr1.fa";
 $reads_basename = $reads_basename || "m_chr1_6";
 $minins = $minins || 0;
 $maxins = $maxins || 700;
@@ -102,36 +99,25 @@ if ( $skip_to eq "N" ) { print "Skipping to analysis\n";   goto ANALYSIS; }
 ####################
 
 MAPPING:
-print "Running MAPPING...\n";
-$project->mapping_setup(
-  $index_dir,
-  $reads_dir,
-  $reads_basename,
-);
+$project->mapping_setup( $index_dir );
 $project->build_bowtie_index( $index_dir );
 $project->run_bowtie_mapping( $num_threads, $minins, $maxins );
 
 COLLECTION:
-print "Running COLLECTION...\n";
 $project->bowtie_identify( $existing_alignment_file );
 
 FILTERING:
-print "Running FILTERING...\n";
 $project->create_fake_pairs( $existing_alignment_file, $existing_halfmapping_file );
 $project->run_fake_pairs_alignment( $num_threads );
 $project->filter1();
 
 ASSEMBLY:
-print "Running ASSEMBLY...\n";
 $project->assemble_groups( $intron_length, $num_aln, $min_contig_length );
 
 ALIGNMENT:
-print "Running ALIGNMENT...\n";
 $project->build_blast_index( $index_dir );
 $project->align_groups_blast();
 $project->align_groups_clustal();
-
-#ANALYSIS:
 
 # Copy latest run to "run-latest" directory for quickly locating the last-run results
 system( "rm -rf run-latest/*" );
