@@ -22,7 +22,7 @@ The following packages must be installed and accessible from the command line:
 
 1. [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
 
-2. [ClustalW](www.ebi.ac.uk/Tools/msa/clustalw2/)
+2. [ClustalW](http://www.ebi.ac.uk/Tools/msa/clustalw2/)
 
 3. [Taipan](http://sourceforge.net/projects/taipan/)
 
