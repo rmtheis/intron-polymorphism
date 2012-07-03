@@ -26,20 +26,14 @@ use IO::File;
 
 my $usage_msg = "Bins distribution of half-mapping alignments along reported positions.\n"
               . "Usage: find_distrib.pl -i sam_file [-b bin_size (default: 100)]\n";
-unless ( @ARGV ) {
-  print $usage_msg;
-  exit;
-}
+die $usage_msg unless ( @ARGV );
 my ( $aligned, $input_file );
 my $bin_size = 100;
 GetOptions(
   'b:i' => \$bin_size,
   'i:s' => \$input_file # SAM input file
 ) || die "$0: Bad option";
-unless ( defined $input_file ) {
-  print $usage_msg;
-  exit;  
-}
+die $usage_msg unless ( defined $input_file );
 
 my $ifh = IO::File->new( $input_file, 'r' ) or die "Can't open $input_file: $!";
 my %fragments = ();

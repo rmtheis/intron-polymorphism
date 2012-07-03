@@ -28,16 +28,10 @@ use IO::File;
 my $usage_msg =
   "Converts a SAM format file to Fastq format, ignoring unaligned reads and secondary alignments.\n"
   . "Usage: sam2fastq.pl -i sam_file > output.sam\n";
-unless ( @ARGV ) {
-  print $usage_msg;
-  exit;
-}
+die $usage_msg unless ( @ARGV );
 my $input_file;
 GetOptions( "i=s" =>\$input_file ) || die "$0: Bad option";
-unless ( defined $input_file ) {
-  print $usage_msg;
-  exit;  
-}
+die $usage_msg unless ( defined $input_file );
 
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
 while ( my $line = $ifh->getline ) {
