@@ -26,11 +26,14 @@ use IO::File;
 
 my $usage_msg =
   "Views a clustal multiple sequence alignment output file, ignoring unaligned regions.\n"
-  . "Usage: trim_clustal.pl -i clustal_file.aln\n";
+  . "Usage: trim_clustal.pl -i clustal_file.aln {-m margin (default:50)}\n";
 die $usage_msg unless ( @ARGV );
 my $input_file;
 my $margin_size = 50;
-GetOptions( "i=s" =>\$input_file ) || die "$0: Bad option";
+GetOptions(
+   "i:s" =>\$input_file,
+   "m:i" =>\$margin_size
+) || die "$0: Bad option";
 die $usage_msg unless ( defined $input_file );
 
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
@@ -92,5 +95,3 @@ while ( my $line = $ifh->getline ) {
 }
 $ifh->close;
 exit;
-
-
