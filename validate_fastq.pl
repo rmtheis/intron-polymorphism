@@ -35,7 +35,7 @@ my $usage_msg = "Performs basic validation on a Fastq file.\n"
               . "(Basename is filename without '_1.fq' or '_2.fq' extension)\n";
 die $usage_msg unless ( @ARGV );
 my $base_name;
-GetOptions( "i=s" =>\$base_name );
+GetOptions( "i=s" =>\$base_name ) || die "$0: Bad option";
 die $usage_msg unless ( defined $base_name );
 
 my $input_file_1 = $base_name . "_1.fq";

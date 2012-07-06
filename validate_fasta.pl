@@ -26,7 +26,7 @@ my $usage_msg = "Performs basic validation on a Fasta file.\n"
               . "Usage: validate_fasta.pl -i fasta_file\n";
 die $usage_msg unless ( @ARGV );
 my $input_file;
-GetOptions( "i=s" =>\$input_file );
+GetOptions( "i=s" =>\$input_file ) || die "$0: Bad option";
 die $usage_msg unless ( defined $input_file );
 
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
