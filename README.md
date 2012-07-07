@@ -14,6 +14,7 @@ Install required Perl modules:
 Install project code:
 
     git clone git://github.com/rmtheis/intron-polymorphism.git
+    cd intron-polymorphism
     chmod +x intron-polymorphism/*.pl
 
 ## EXTERNAL DEPENDENCIES
