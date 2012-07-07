@@ -19,7 +19,7 @@ Install project code:
 
 ## EXTERNAL DEPENDENCIES
 
-The following packages must be installed and accessible from the command line:
+The following packages must be installed and added to the PATH environment variable or otherwise made accessible from the command line:
 
 1. [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
 
