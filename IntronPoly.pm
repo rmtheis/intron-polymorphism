@@ -132,14 +132,15 @@ sub build_db {
  Returns : No return value
  Args    : Scalar full path to the Bowtie executable directory, scalar full path to the Bowtie
            index directory, scalar full path to the directory containing the Fastq read pairs files,
-           and a scalar of the base name of the read pairs files (filename without "_1.fq" or
-           "_2.fq" ending)
+           scalar of the base name of the read pairs files (filename without "_1.fq" or "_2.fq" ending),
+           flag indicating whether to validate the reads file (optional)
 
 =cut
 
 sub mapping_setup {
   my $self                 = shift;
   my $index_dir            = shift;
+  my $validate_reads       = shift || 0;
   my $scripts_dir          = $self->{"scripts_dir"};
   my $work_dir             = $self->{"work_dir"};
   my $ref_genome           = $self->{"ref_genome"}->{"full_pathname"};
@@ -162,11 +163,12 @@ sub mapping_setup {
   die "$0: reads file $reads_file_one does not exist" unless ( -e $reads_file_one );
   die "$0: reads file $reads_file_two does not exist" unless ( -e $reads_file_two );
 
-  print "Validating Fastq read pair data...\n";
-  
-  # Perform basic validation on read pairs files
-  capture("${scripts_dir}validate_fastq.pl -i ${reads_dir}$reads_basename");
-  die "$0: validate_fastq.pl exited unsuccessful" if ( $EXITVAL != 0 );
+  if ($validate_reads) {
+    # Perform basic validation on read pairs files
+    print "Validating Fastq read pair data...\n";   
+    capture("${scripts_dir}validate_fastq.pl -i ${reads_dir}$reads_basename");
+    die "$0: validate_fastq.pl exited unsuccessful" if ( $EXITVAL != 0 );
+  }
 
   # Create directory for Bowtie index files if necessary
   $index_dir = $1 if ( $index_dir =~ /(.*)\/$/ );

@@ -36,6 +36,7 @@ my $existing_alignment_file = undef;    # Path to existing SAM alignment data. L
 my $existing_halfmapping_file = undef;  # Path to existing SAM halfmapping mate data. Leave as undef for new run
 my $skip_to = undef;                    # Pipeline step to skip ahead to
 my $num_threads = undef;                # Number of parallel search threads to use for alignment
+my $validate_reads = undef;             # Flag indicating whether to validate Fastq reads file
 
 ###########################
 # INITIALIZE THE PIPELINE #
@@ -55,6 +56,7 @@ GetOptions(
   'min:i' => \$minins,
   'n:i' => \$num_aln,
   't:s' => \$num_threads,
+  'v' => \$validate_reads,
 ) || die "$0: Bad option";
 
 # Use defaults for undefined values
@@ -70,6 +72,7 @@ $existing_alignment_file = $existing_alignment_file || "";
 $existing_halfmapping_file = $existing_halfmapping_file || "";
 $skip_to = $skip_to || "";
 $num_threads = $num_threads || Sys::CPU::cpu_count();
+$validate_reads = $validate_reads || 0;
 
 # Resolve relative pathnames
 $reads_basename =~ s/^~/$ENV{HOME}/;
@@ -105,7 +108,7 @@ if ( $skip_to eq "N" ) { print "Skipping to analysis\n";   goto ANALYSIS; }
 ####################
 
 MAPPING:
-$project->mapping_setup( $index_dir );
+$project->mapping_setup( $index_dir, $validate_reads );
 $project->build_bowtie_index( $index_dir );
 $project->run_bowtie_mapping( $num_threads, $minins, $maxins );
 
