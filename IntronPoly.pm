@@ -845,7 +845,7 @@ sub align_groups_blast() {
   my $work_dir                      = $self->{"work_dir"};
   my $reads_basename                = $self->{"reads"}->{"basename"};
   my $ref_genome_basename           = $self->{"ref_genome"}->{"basename"};
-  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned_blast";
+  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned.blast";
   my $index                         = "$index_dir/${ref_genome_basename}";
   $self->{"contigs_alignment_file"} = $output_file;
 
@@ -878,9 +878,12 @@ sub align_groups_clustal() {
   my $contigs_file                  = shift || $self->{"contigs_file"};
   my $reads_basename                = $self->{"reads"}->{"basename"};
   my $ref_genome                    = $self->{"ref_genome"}->{"full_pathname"};
+  my $scripts_dir                   = $self->{"scripts_dir"};
   my $work_dir                      = $self->{"work_dir"};
-  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned_clustal";
+  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned.aln";
   $self->{"contigs_alignment_file"} = $output_file;
+  my $output_file_trimmed           = $output_file;
+  $output_file_trimmed              =~ s/(\.[^.]+)$/_trimmed.aln/;
   my $clustal_input_file            = "$work_dir/${reads_basename}_pre-alignment";
 
   return if (-z $contigs_file || !(-e $contigs_file));
@@ -894,6 +897,11 @@ sub align_groups_clustal() {
   capture( "clustalw -infile=$clustal_input_file -gapopen=50 -gapext=0.01 -outfile=$output_file" );
   die "$0: clustalw exited unsuccessful" if ( $EXITVAL != 0 );
   
+  # Save a truncated version of the Clustal results
+  if (-e $output_file && !(-z $output_file)) { 
+    capture("${scripts_dir}trim_clustal.pl -i $output_file -m 100 > $output_file_trimmed");
+    die "$0: trim_clustal.pl exited unsuccessful" if ( $EXITVAL != 0 );
+  }
   print "Alignment results saved to $output_file\n";
 }
 
