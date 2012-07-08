@@ -44,6 +44,7 @@ sub new {
   $self->{"bowtie_db"}      = undef;   # Hash of data directories for bowtie
   $self->{"alignment_file"} = undef;   # Scalar path to initial read pairs alignments
   $self->{"read_length"}    = undef;   # Median read length determined from alignment
+  $self->{"frag_length"}    = undef;   # Fragment length
   bless($self);
   return $self;
 }
@@ -54,7 +55,7 @@ sub new {
  Usage:  : $project->set_work_dir( "path_to_scripts" )
  Function: Creates directory for pipeline working data and output files
  Example : my $work_dir = "/home/theis/work";
-           $project->set_work_dir( $scripts_dir )
+           $project->set_work_dir( $work_dir )
  Returns : The path to the directory for pipeline working data and output files
  Args    : Scalar of full path to the parent directory of the work directory
 
@@ -62,18 +63,23 @@ sub new {
 
 sub set_work_dir {
   my $self        = shift;
-  my $scripts_dir = shift;
+  my $output_dir  = shift;
+  my $scripts_dir = shift || "";
   $scripts_dir =~ s!/*$!/! if ($scripts_dir ne ""); # Add trailing slash if not already present
   $self->{"scripts_dir"} = $scripts_dir;
-  my $work_dir = shift || "${scripts_dir}run-" . &_datestamp;
+  $output_dir =~ s!/*$!/! if ($output_dir ne ""); # Add trailing slash if not already present
+  my $work_dir = shift || "${output_dir}run-" . &_datestamp;
+  unless ( -e $output_dir ) {
+    &_make_dir($output_dir);
+  }
   unless ( -e $work_dir ) {
     $work_dir = $1 if ( $work_dir =~ /(.*)\/$/ );
     &_make_dir($work_dir);
-    print "Created work directory $work_dir\n";
+    print "Created output directory $work_dir\n";
   }
   else {
     $work_dir = &_check_dir($work_dir);
-    print "Using existing work directory $work_dir\n";
+    print "Using existing output directory $work_dir\n";
   }
   $self->{"work_dir"} = $work_dir;
 
@@ -217,10 +223,6 @@ sub build_bowtie_index {
     capture( "bowtie2-build $ref_genome $index_dir/$ref_genome_basename" );
     die "$0: bowtie2-build exited unsuccessful" if ( $EXITVAL != 0 );
   }
-  else {
-    print "Bowtie index already exists, not re-creating.\n";
-    print "Using Bowtie index at $index_dir/$ref_genome_basename.*.bt2\n";
-  }
 }
 
 =head2 run_bowtie_mapping
@@ -295,15 +297,7 @@ sub bowtie_identify {
     print STDERR "Alignment file not found.\n";
     return;
   }
-
   $scripts_dir =~ s!/*$!/! if ($scripts_dir ne ""); # Add trailing slash if not already present
-
-  # Determine length of read pair for use in filtering and grouping steps
-  print "Determining fragment length...\n";
-  my $fragment_length = &_compute_frag_length( $scripts_dir, $alignment_file );
-  $fragment_length =~ s/\s+$//;
-  $self->{"frag_length"} = $fragment_length;
-  print "Median fragment length: $fragment_length nt\n";
 
   print "Identifying half-mapping read pairs...\n";
   
@@ -398,7 +392,7 @@ sub bowtie_identify {
   $ofh->close;
   if ($count == 0) {
     print STDERR "No half-mapping read pairs found.\n";
-    return;
+    exit;
   }
   print "Saved $count half-mapping read pair alignments to $outfile\n";
   print "Sorting...\n";
@@ -406,6 +400,36 @@ sub bowtie_identify {
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
 }
 
+=head2 set_fragment_length
+
+ Title   : set_fragment_length
+ Usage   : $project->set_fragment_length()
+ Function: Sets fragment length value for use in filtering and grouping pipeline steps. Distance will
+           be measured from the given alignment file if one is provided and a length of -1 is used.
+ Example : $project->set_fragment_length( -1, "existing_alignment_file.sam" );
+ Returns : No return value
+ Args    : Fragment length: outer distance between mates, or -1 as a place holder, and path to an
+           existing alignment file to use for inferring the median fragment length
+
+=cut
+
+sub set_fragment_length {
+  my $self = shift;
+  my $fragment_length = shift;
+  my $alignment_file = shift || $self->{"alignment_file"};
+  my $scripts_dir = $self->{"scripts_dir"};
+  
+  return if (defined $self->{"frag_length"});
+  
+  if (!defined $fragment_length || $fragment_length == -1) {
+    print "Determining fragment length...\n";
+    $fragment_length = &_compute_frag_length( $scripts_dir, $alignment_file );
+    $fragment_length =~ s/\s+$//;
+    print "Median fragment length: $fragment_length nt\n";
+  }
+  $self->{"frag_length"} = $fragment_length;
+}
+  
 =head2 create_simulated_pairs
 
  Title   : create_simulated_pairs
@@ -439,9 +463,6 @@ sub create_simulated_pairs {
 
   # Define length of each mate for the simulated read pairs
   my $mate_length = 16;
-
-  # Make sure we have computed the fragment length
-  $self->{"frag_length"} = &_compute_frag_length( $scripts_dir, $alignment_file ) if ($frag_length eq "");
 
   my $ifh  = IO::File->new( $infile, 'r' ) or die "$0: Can't open $infile: $!";
   my $ofh1 = IO::File->new( $outfile1, 'w' ) or die "$0: Can't open $outfile1: $!";
@@ -541,8 +562,8 @@ sub align_simulated_pairs {
 
 sub filter1 {
   my $self                = shift;
-  my $realignment_file    = shift || $self->{"realignment_file"};
   my $infile              = shift || $self->{"halfmapping_file"};
+  my $realignment_file    = shift || $self->{"realignment_file"};
   my $work_dir            = $self->{"work_dir"};
   my $reads_basename      = $self->{"reads"}->{"basename"};
   my $frag_length         = $self->{"frag_length"};
@@ -637,7 +658,7 @@ sub filter1 {
 sub assemble_groups {
   my $self                = shift;
   my $intron_length       = shift;
-  my $num_aln             = shift;
+  my $min_mates           = shift;
   my $min_contig_length   = shift;
   my $halfmap_file        = shift || $self->{"halfmapping_file"};
   my $sorted_file         = $halfmap_file;
@@ -707,8 +728,8 @@ sub assemble_groups {
       $reversed = 0;
     }
 
-    # Assemble groups containing at least $num_aln reads
-    if ( scalar(@groups) >= $num_aln ) {
+    # Assemble groups containing at least $min_mates reads
+    if ( scalar(@groups) >= $min_mates ) {
       ++$count;
       my $samfile = "$work_dir/assembly/${reads_basename}_group$count.sam";
       my $rawfile = "$work_dir/assembly/${reads_basename}_group$count.raw";
@@ -755,7 +776,7 @@ sub assemble_groups {
   $ifh->close;
   
   # Handle the last group
-  if ( scalar(@groups) >= $num_aln ) {
+  if ( scalar(@groups) >= $min_mates ) {
     ++$count;
     my $samfile = "$work_dir/assembly/${reads_basename}_group$count.sam";
     my $rawfile = "$work_dir/assembly/${reads_basename}_group$count.raw";
@@ -903,6 +924,7 @@ sub align_groups_clustal() {
     die "$0: trim_clustal.pl exited unsuccessful" if ( $EXITVAL != 0 );
   }
   print "Alignment results saved to $output_file\n";
+  print "Trimmed alignment results saved to $output_file_trimmed\n"
 }
 
 ############ Subroutines for internal use by this module ############

@@ -20,23 +20,53 @@ use IntronPoly;
 use Getopt::Long;
 use Sys::CPU;
 
+use constant VERSION => ("v0.9.0");
+my $usage_msg = "Usage:\n"
+  . "    ip_handler.pl [required arguments] [options]\n"
+  . "\n"
+  . "Required Arguments:\n"
+  . "    -g/--ref-genome              <string>\n"
+  . "    -r/--reads-basename          <string>\n"
+  . "\n"
+  . "Options:\n"
+  . "    -o/--output-dir               <string>     [ default: ./ip_out  ]\n"
+  . "    -f/--fragment-length          <int>        [ default: infer     ]\n"
+  . "    -a/--min-mates                <int>        [ default: 3         ]\n"
+  . "    -l/--min-contig-length        <int>        [ default: 16        ]\n"
+  . "    -m/--max-intron-length        <int>        [ default: 250       ]\n"
+  . "    -I/--minins                   <int>        [ default: 0         ]\n"
+  . "    -X/--maxins                   <int>        [ default: 3000      ]\n"
+  . "    -p/--num-threads              <int>        [ default: all cores ]\n"
+  . "    -s/--skip-to                  <C,F,A,L>\n"
+  . "    -b/--existing-bwt-index-dir   <string>\n"
+  . "    -w/--existing-align-file      <string>\n"
+  . "    -e/--existing-halfmap-file    <string>\n"
+  . "    -c/--existing-contigs-file    <string>\n"
+  . "    --validate-reads\n"
+  . "    --version\n";
+
 ##################################
 # CONFIGURE USER RUNTIME OPTIONS #
 ##################################
 
 my $ref_genome_file = undef;            # Reference genome (FastA format)
-my $reads_basename = "m5";             # Read pairs pathname, without "_1.fq" or "_2.fq" extension (FastQ format)
+my $reads_basename = undef;             # Read pairs basename, without "_1.fq" or "_2.fq" extension (FastQ format)
+my $output_dir = undef;                 # Directory to put output files in
+my $fragment_length = undef;            # Outer distance between mates
+my $min_mates = undef;                  # Minimum number of nearby half-mapping mates for local assembly
+my $min_contig_length;                  # Minimum contig length for local assembly
+my $intron_length = undef;              # Expected intron length for assembly
 my $minins = undef;                     # Bowtie -I/--minins <int> value
 my $maxins = undef;                     # Bowtie -X/--maxins <int> value
-my $intron_length = undef;              # Expected intron length for assembly
-my $num_aln = undef;                    # Minimum number of nearby half-mapping mates for local assembly
-my $min_contig_length;                  # Minimum contig length for local assembly
+my $num_threads = undef;                # Number of parallel search threads to use for alignment
+my $skip_to = undef;                    # Pipeline step to skip ahead to
 my $index_dir = undef;                  # Directory containing index files for Bowtie/Blast
 my $existing_alignment_file = undef;    # Path to existing SAM alignment data. Leave as undef for new run
 my $existing_halfmapping_file = undef;  # Path to existing SAM halfmapping mate data. Leave as undef for new run
-my $skip_to = undef;                    # Pipeline step to skip ahead to
-my $num_threads = undef;                # Number of parallel search threads to use for alignment
-my $validate_reads = undef;             # Flag indicating whether to validate Fastq reads file
+my $existing_contigs_file = undef;      # Path to existing multi-Fasta contigs data. Leave as undef for new run
+my $validate_reads;                     # Flag indicating whether to validate Fastq reads file
+my $version;                            # Flag to print version number and exit
+my $help;                               # Flag to print usage message and exit
 
 ###########################
 # INITIALIZE THE PIPELINE #
@@ -44,39 +74,75 @@ my $validate_reads = undef;             # Flag indicating whether to validate Fa
 
 # Parse command-line options, overriding any options set above
 GetOptions(
-  'a:s' => \$existing_alignment_file,
-  'b:s' => \$reads_basename,
-  'c:s' => \$min_contig_length,
-  'g:s' => \$ref_genome_file,
-  'h:s' => \$existing_halfmapping_file,
-  'idx:s' => \$index_dir,
-  'k:s' => \$skip_to,
-  'l:i' => \$intron_length,
-  'max:i' => \$maxins,
-  'min:i' => \$minins,
-  'n:i' => \$num_aln,
-  't:s' => \$num_threads,
-  'v' => \$validate_reads,
+  "g|ref-genome=s" => \$ref_genome_file,
+  "r|reads-basename=s" => \$reads_basename,
+  "o|output-dir:s" => \$output_dir,
+  "f|fragment-length:i" => \$fragment_length,
+  "a|min-mates:i" => \$min_mates,
+  "l|min-contig-length:s" => \$min_contig_length,
+  "m|max-intron-length:i" => \$intron_length,
+  "X|maxins:i" => \$maxins,
+  "I|minins:i" => \$minins,
+  "p|num-threads:s" => \$num_threads,
+  "s|skip-to:s" => \$skip_to,
+  "b|existing-bwt-index-dir:s" => \$index_dir,
+  "w|existing-align-file:s" => \$existing_alignment_file,
+  "e|existing-halfmap-file:s" => \$existing_halfmapping_file,
+  "c|existing-contigs-file:s" => \$existing_contigs_file,
+  "validate-reads" => \$validate_reads,
+  "v|version" => \$version,
+  "h|help" => \$help,
 ) || die "$0: Bad option";
+die $usage_msg unless ( (defined $ref_genome_file && defined $reads_basename)
+                       || defined $version || defined $help );
 
 # Use defaults for undefined values
-$ref_genome_file = $ref_genome_file || "testdata/m_chr1.fa";
-$reads_basename = $reads_basename || "m_chr1_6";
-$minins = $minins || 0;
-$maxins = $maxins || 700;
-$intron_length = $intron_length || 250;
-$num_aln = $num_aln || 3;
+$output_dir = $output_dir || "./ip_out/";
+$fragment_length = $fragment_length || -1;
+$min_mates = $min_mates || 3;
 $min_contig_length = $min_contig_length || 16;
-$index_dir = $index_dir || $ENV{HOME} . "/intron-polymorphism/index";
-$existing_alignment_file = $existing_alignment_file || "";
-$existing_halfmapping_file = $existing_halfmapping_file || "";
-$skip_to = $skip_to || "";
+$intron_length = $intron_length || 250;
+$minins = $minins || 0;
+$maxins = $maxins || 3000;
 $num_threads = $num_threads || Sys::CPU::cpu_count();
+$skip_to = $skip_to || "";
+$index_dir = $index_dir || $ENV{HOME} . "/intron-polymorphism/index";
+#$existing_alignment_file = $existing_alignment_file || "";
+#$existing_halfmapping_file = $existing_halfmapping_file || "";
+#$existing_contigs_file = $existing_contigs_file || "";
 $validate_reads = $validate_reads || 0;
+
+# Print version number if requested
+if ($version) {
+  print VERSION . "\n";
+  exit;
+}
+
+# Print usage message if requested
+if ($help) {
+  print $usage_msg;
+  exit;
+}
+
+# If jumping to a later pipeline step, ensure files are available
+if ( $skip_to eq "C" && !defined $existing_alignment_file ) {
+  die "--skip_to 'C' requires --existing-align-file\n";
+}
+if ( ($skip_to eq "F" && !(defined $existing_alignment_file && defined $existing_halfmapping_file)) ) {
+  die "--skip_to 'F' requires --existing-align-file and --existing_halfmap-file\n";
+}
+if ( ($skip_to eq "A" && !(defined $existing_alignment_file && defined $existing_halfmapping_file)) ) {
+  die "--skip_to 'A' requires --existing-align-file and --existing_halfmap-file\n";
+}
+if ( $skip_to eq "L" && !defined $existing_contigs_file ) {
+  die "--skip_to 'L' requires --existing-contigs-file\n";
+}
 
 # Resolve relative pathnames
 $reads_basename =~ s/^~/$ENV{HOME}/;
 $ref_genome_file =~ s/^~/$ENV{HOME}/;
+$output_dir =~ s/^~/$ENV{HOME}/;
+$index_dir =~ s/^~/$ENV{HOME}/;
 $existing_alignment_file =~ s/^~/$ENV{HOME}/;
 $existing_halfmapping_file =~ s/^~/$ENV{HOME}/;
 
@@ -85,7 +151,7 @@ my $project = IntronPoly->new();
 
 # Create output directory
 my $scripts_dir = $FindBin::Bin;
-my $work_dir = $project->set_work_dir( $scripts_dir );
+my $work_dir = $project->set_work_dir( $output_dir, $scripts_dir );
 
 # Set paths to data used throughout pipeline
 $project->build_db(
@@ -101,32 +167,34 @@ if ( $skip_to eq "C" ) { print "Skipping to collecting\n"; goto COLLECTION; }
 if ( $skip_to eq "F" ) { print "Skipping to filtering\n";  goto FILTERING; }
 if ( $skip_to eq "A" ) { print "Skipping to assembly\n";   goto ASSEMBLY; }
 if ( $skip_to eq "L" ) { print "Skipping to alignment\n";  goto ALIGNMENT; }
-if ( $skip_to eq "N" ) { print "Skipping to analysis\n";   goto ANALYSIS; }
 
 ####################
 # RUN THE PIPELINE #
 ####################
 
-MAPPING:
 $project->mapping_setup( $index_dir, $validate_reads );
 $project->build_bowtie_index( $index_dir );
 $project->run_bowtie_mapping( $num_threads, $minins, $maxins );
 
 COLLECTION:
+$project->build_bowtie_index( $index_dir );
 $project->bowtie_identify( $existing_alignment_file );
 
 FILTERING:
+$project->build_bowtie_index( $index_dir );
+$project->set_fragment_length( $fragment_length, $existing_alignment_file );
 $project->create_simulated_pairs( $existing_alignment_file, $existing_halfmapping_file );
 $project->align_simulated_pairs( $num_threads );
-$project->filter1();
+$project->filter1( $existing_halfmapping_file );
 
 ASSEMBLY:
-$project->assemble_groups( $intron_length, $num_aln, $min_contig_length );
+$project->set_fragment_length( $fragment_length, $existing_alignment_file );
+$project->assemble_groups( $intron_length, $min_mates, $min_contig_length, $existing_halfmapping_file );
 
 ALIGNMENT:
-$project->build_blast_index( $index_dir );
-$project->align_groups_blast();
-$project->align_groups_clustal();
+#$project->build_blast_index( $index_dir );
+#$project->align_groups_blast( $existing_contigs_file );
+$project->align_groups_clustal( $existing_contigs_file );
 
 # Copy latest run to "run-latest" directory for quickly locating the last-run results
 system( "rm -rf run-latest/*" );

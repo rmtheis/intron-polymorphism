@@ -21,7 +21,7 @@ use Getopt::Long;
 use IO::File;
 
 #
-# Bins the half-mapping reads in a SAM file.
+# Bins the half-mapping reads in a SAM file by position in the reference genome.
 #
 
 my $usage_msg = "Bins distribution of half-mapping alignments along reported positions.\n"
@@ -30,8 +30,8 @@ die $usage_msg unless ( @ARGV );
 my ( $aligned, $input_file );
 my $bin_size = 100;
 GetOptions(
-  'b:i' => \$bin_size,
-  'i:s' => \$input_file # SAM input file
+  "b:i" => \$bin_size,
+  "i=s" => \$input_file # SAM input file
 ) || die "$0: Bad option";
 die $usage_msg unless ( defined $input_file );
 

@@ -18,6 +18,8 @@
 # You should have received a copy of the GNU General Public License
 # along with Bowtie 2.  If not, see <http://www.gnu.org/licenses/>.
 #
+# 2012 - This file has been modified from the original.
+#
 
 #
 # The paired-end data is made by (a) changing to the reads subdirectory and (b)

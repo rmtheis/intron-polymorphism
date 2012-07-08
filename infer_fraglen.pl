@@ -28,9 +28,9 @@ die $usage_msg unless ( @ARGV );
 my $bin_size = 10;
 my ( $input_file, $median );
 GetOptions(
-  'b:i' => \$bin_size,
-  'i:s' => \$input_file, # SAM input file
-  'm' => \$median # Optional flag for reporting only median fragment length. Default: binned output
+  "b:i" => \$bin_size,
+  "i=s" => \$input_file, # SAM input file
+  "m" => \$median # Optional flag for reporting only median fragment length. Default: binned output
 ) || die "$0: Bad option";
 die $usage_msg unless ( defined $input_file );
 

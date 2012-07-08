@@ -14,21 +14,18 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-use IntronPoly;
-use lib '..';
 use strict;
 use Getopt::Long;
 use IO::File;
 
 #
-# Converts a SAM format file to Fastq format.
+# Prints the sequences from a SAM format file, one read per line.
 #
-# Unaligned reads and secondary alignments are ignored. Output is printed to standard out.
+# Output is printed to standard out.
 #
 
-my $usage_msg =
-  "Converts a SAM format file to Fastq format, ignoring unaligned reads and secondary alignments.\n"
-  . "Usage: sam2fastq.pl -i sam_file > output.sam\n";
+my $usage_msg = "Prints the raw sequences from a SAM format file.\n"
+              . "Usage: sam2raw.pl -i sam_file > output.raw\n";
 die $usage_msg unless ( @ARGV );
 my $input_file;
 GetOptions( "i=s" =>\$input_file ) || die "$0: Bad option";
@@ -37,16 +34,8 @@ die $usage_msg unless ( defined $input_file );
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
 while ( my $line = $ifh->getline ) {
   next if $line =~ m/^@/;
-  my @f = split(/\t/, $line);
-  my ($id, $flags, $chr, $offset, $seq, $qual) = ($f[0], $f[1], $f[2], $f[7], $f[9], $f[10]);
-  next if (IntronPoly::_isInNonMappingPair($flags) != 0);
-  next if (IntronPoly::_isSecondaryAlignment($flags) != 0);
-
-  # Write Fastq output
-  print "@" . "${id}_${flags}_${chr}_${offset}\n";
-  print "$seq\n";
-  print "+\n";
-  print "$qual\n";
+  my @fields = split(/\t/, $line);
+  print "$fields[9]\n";
 }
 $ifh->close;
 exit;

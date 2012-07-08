@@ -1,7 +1,19 @@
 # intron-polymorphism
 * * *
 
+Discovers intron insertions and deletions from samples of closely related organisms.
+
 This project is under construction--please do not try to use it until it is finished!
+
+## EXTERNAL DEPENDENCIES
+
+The following packages must be installed and added to your PATH:
+
+1. [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
+
+2. [ClustalW](http://www.ebi.ac.uk/Tools/msa/clustalw2/)
+
+3. [Taipan](http://sourceforge.net/projects/taipan/)
 
 ## INSTALLATION
 **_Linux (64-bit)_**
@@ -15,24 +27,14 @@ Install project code:
 
     git clone git://github.com/rmtheis/intron-polymorphism.git
     cd intron-polymorphism
-    chmod +x intron-polymorphism/*.pl
-
-## EXTERNAL DEPENDENCIES
-
-The following packages must be installed and added to the PATH environment variable or otherwise made accessible from the command line:
-
-1. [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
-
-2. [ClustalW](http://www.ebi.ac.uk/Tools/msa/clustalw2/)
-
-3. [Taipan](http://sourceforge.net/projects/taipan/)
+    chmod u+x intron-polymorphism/*.pl
 
 ## RUNNING
 
     cd intron-polymorphism
-    ./ip_handler.pl -b reads_basename -g ref_genome.fa 1> run.output 2>&1 &
+    ./ip_handler.pl --reads_basename myreads --ref-genome genome.fa 1> run.output 2>&1 &
     tail -f run.output
 
 ## LICENSE
 
-[Apache 2.0](http://www.apache.org/licenses/LICENSE-2.0.html)
+[Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.html)
