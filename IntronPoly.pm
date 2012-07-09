@@ -451,7 +451,6 @@ sub create_simulated_pairs {
   my $infile         = shift || $self->{"halfmapping_file"};
   my $work_dir       = $self->{"work_dir"};
   my $reads_basename = $self->{"reads"}->{"basename"};
-  my $scripts_dir    = $self->{"scripts_dir"};
   my $frag_length    = $self->{"frag_length"};
   my $outfile1       = "$work_dir/${reads_basename}_sim_pairs_1.fq";
   my $outfile2       = "$work_dir/${reads_basename}_sim_pairs_2.fq";
