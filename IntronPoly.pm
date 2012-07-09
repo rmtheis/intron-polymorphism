@@ -110,6 +110,10 @@ sub build_db {
   my $ref_genome_filename  = shift;
   my $reads_basename       = shift;
 
+  die "Cannot find $ref_genome_filename" if !(-e $ref_genome_filename);
+  die "Cannot find ${reads_basename}_1.fq" if !(-e "${reads_basename}_1.fq");
+  die "Cannot find ${reads_basename}_2.fq" if !(-e "${reads_basename}_2.fq");
+  
   # Use the base of the read pairs filenames for saving data throughout pipeline
   {
     my ( $file, $dir, $ext ) = fileparse( $reads_basename, qr/\.[^.]*/ );
