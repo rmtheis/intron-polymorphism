@@ -19,9 +19,9 @@ use Getopt::Long;
 use IO::File;
 
 #
-# Prints the sequences from a SAM format file, one read per line.
+# Prints the sequences from a SAM format file to standard out, one read per line.
 #
-# Output is printed to standard out.
+# Note: This is equivalent to 'cut -f 10 input_file'
 #
 
 my $usage_msg = "Prints the raw sequences from a SAM format file.\n"
@@ -39,5 +39,4 @@ while ( my $line = $ifh->getline ) {
 }
 $ifh->close;
 exit;
-
 
