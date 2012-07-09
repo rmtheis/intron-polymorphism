@@ -107,9 +107,9 @@ $maxins = $maxins || 3000;
 $num_threads = $num_threads || Sys::CPU::cpu_count();
 $skip_to = $skip_to || "";
 $index_dir = $index_dir || $ENV{HOME} . "/intron-polymorphism/index";
-#$existing_alignment_file = $existing_alignment_file || "";
-#$existing_halfmapping_file = $existing_halfmapping_file || "";
-#$existing_contigs_file = $existing_contigs_file || "";
+$existing_alignment_file = $existing_alignment_file || "";
+$existing_halfmapping_file = $existing_halfmapping_file || "";
+$existing_contigs_file = $existing_contigs_file || "";
 $validate_reads = $validate_reads || 0;
 
 # Print version number if requested
@@ -124,18 +124,18 @@ if ($help) {
   exit;
 }
 
-# If jumping to a later pipeline step, ensure files are available
+# If jumping to a later pipeline step, ensure required files are available
 if ( $skip_to eq "C" && !defined $existing_alignment_file ) {
-  die "--skip_to 'C' requires --existing-align-file\n";
+  die "Must specify --existing-align-file with '--skip_to C'\n";
 }
 if ( ($skip_to eq "F" && !(defined $existing_alignment_file && defined $existing_halfmapping_file)) ) {
-  die "--skip_to 'F' requires --existing-align-file and --existing_halfmap-file\n";
+  die "Must specify --existing-align-file and --existing_halfmap-file with '--skip_to F'\n";
 }
 if ( ($skip_to eq "A" && !(defined $existing_alignment_file && defined $existing_halfmapping_file)) ) {
-  die "--skip_to 'A' requires --existing-align-file and --existing_halfmap-file\n";
+  die "Must specify --existing-align-file and --existing_halfmap-file with '--skip_to A'\n";
 }
 if ( $skip_to eq "L" && !defined $existing_contigs_file ) {
-  die "--skip_to 'L' requires --existing-contigs-file\n";
+  die "Must specify --existing-contigs-file with '--skip_to L'\n";
 }
 
 # Resolve relative pathnames
@@ -145,6 +145,7 @@ $output_dir =~ s/^~/$ENV{HOME}/;
 $index_dir =~ s/^~/$ENV{HOME}/;
 $existing_alignment_file =~ s/^~/$ENV{HOME}/;
 $existing_halfmapping_file =~ s/^~/$ENV{HOME}/;
+$existing_contigs_file =~ s/^~/$ENV{HOME}/;
 
 # Initialize the project
 my $project = IntronPoly->new();
@@ -158,6 +159,11 @@ $project->build_db(
   $ref_genome_file,
   $reads_basename,
 );
+
+# Ensure required executables are available
+die "bowtie2 not available on PATH" if system("bowtie2 --version >/dev/null 2>/dev/null") != 0;
+die "taipan not available on PATH" if system("which taipan >/dev/null 2>/dev/null") != 0;
+die "clustalw not available on PATH" if system("which clustalw >/dev/null 2>/dev/null") != 0;
 
 ##############################
 # JUMP TO THE REQUESTED STEP #
