@@ -557,6 +557,7 @@ sub align_simulated_pairs {
  Returns : No return value
  Args    : Path to file containing alignments from a secondary run of Bowtie using relaxed criteria
            (optional), path to file containing original half-mapping reads (optional)
+
 =cut
 
 sub filter1 {
@@ -816,18 +817,19 @@ sub assemble_groups {
 
  Title   : build_blast_index
  Usage   : $project->build_blast_index()
- Function: 
- Example : 
- Returns : 
- Args    : 
+ Function: Creates the Blast index needed for running a Blast alignment.
+ Example : $project->build_blast_index();
+           $project->align_groups_blast( "contigs.fa" );
+ Returns : No return value
+ Args    : Directory to use for the index (optional)
 
 =cut
 
 sub build_blast_index() {
   my $self                = shift;
+  my $index_dir           = shift || $self->{"index_dir"};
   my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $index_dir           = $self->{"index_dir"};
   my $reads_basename      = $self->{"reads"}->{"basename"};
   unless ( -e "$index_dir/$ref_genome_basename.nhr"
     && "$index_dir/$ref_genome_basename.nin"
@@ -837,10 +839,6 @@ sub build_blast_index() {
     print "Creating Blast index in $index_dir...\n";
     capture( "formatdb -p F -i $ref_genome -n $index_dir/$ref_genome_basename" );
     die "$0: formatdb exited unsuccessful" if ( $EXITVAL != 0 );
-  }
-  else {
-    print "Blast index already exists, not re-creating.\n";
-    print "Using Blast index at $index_dir/$ref_genome_basename.n*\n";
   }
 }
 
