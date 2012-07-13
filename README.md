@@ -32,8 +32,8 @@ Install project code:
 ## RUNNING
 
     cd intron-polymorphism
-    ./ip_handler.pl --reads_basename myreads --ref-genome genome.fa 1> run.output 2>&1 &
-    tail -f run.output
+    export PERL5LIB=`pwd`
+    ip_handler.pl --ref-genome genome.fa -1 myfile_1.fa -2 myfile_2.fa
 
 ## LICENSE
 

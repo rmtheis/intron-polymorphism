@@ -31,23 +31,23 @@ use IO::File;
 #
 
 my $usage_msg = "Performs basic validation on a Fastq file.\n"
-              . "Usage: validate_fastq.pl -i fastq_file_basename\n"
-              . "(Basename is filename without '_1.fq' or '_2.fq' extension)\n";
+              . "Usage: validate_fastq.pl -1 fastq_file_1 -2 fastq_file_2\n"
 die $usage_msg unless ( @ARGV );
-my $base_name;
-GetOptions( "i=s" =>\$base_name ) || die "$0: Bad option";
-die $usage_msg unless ( defined $base_name );
+my ( $mate1s, $mate2s );
+GetOptions(
+  "1=s" =>\$mate1s,
+  "2=s" =>\$mate2s,
+  ) || die "$0: Bad option";
+die $usage_msg unless ( defined $mate1s && defined $mate2s );
 
-my $input_file_1 = $base_name . "_1.fq";
-my $input_file_2 = $base_name . "_2.fq";
-my $ifh1 = new IO::File( $input_file_1, 'r' ) or die "Can't open $input_file_1: $!";
-my $ifh2 = new IO::File( $input_file_2, 'r' ) or die "Can't open $input_file_2: $!";
-
-if ( `wc -l $input_file_1 | cut -d ' ' -f 1` != `wc -l $input_file_2 | cut -d ' ' -f 1` ) {
+if ( `wc -l $mate1s | cut -d ' ' -f 1` != `wc -l $mate2s | cut -d ' ' -f 1` ) {
   print STDERR "Validation error: number of lines does not match between files\n";
-  print STDERR "Files: $input_file_1, $input_file_2\n";
+  print STDERR "Files: $mate1s, $mate2s\n";
   die;
 }
+
+my $ifh1 = new IO::File( $mate1s, 'r' ) or die "Can't open $mate1s: $!";
+my $ifh2 = new IO::File( $mate2s, 'r' ) or die "Can't open $mate2s: $!";
 
 my $line_count = 0;
 while ( my $line_1 = $ifh1->getline ) {
@@ -57,28 +57,28 @@ while ( my $line_1 = $ifh1->getline ) {
   if ( $line_count == 0 ) {
     if ( substr( $line_1, 0, 1 ) ne "@" ) {
       print STDERR "Validation error: FastQ ID does not begin with \'@\': $line_1";
-      print STDERR "File: $input_file_1\n";
+      print STDERR "File: $mate1s\n";
       die;
     }
 
     if ( $line_1 =~ m/\|/ ) {
       print STDERR "Validation error: Pipe character (\"\|\") in ID: $line_1";
-      print STDERR "File: $input_file_1\n";
+      print STDERR "File: $mate1s\n";
       die;
     }
     if ( $line_2 =~ m/\|/ ) {
       print STDERR "Validation error: Pipe character (\"\|\") in ID: $line_2";
-      print STDERR "File: $input_file_2\n";
+      print STDERR "File: $mate2s\n";
       die;
     }
   }
 
   if ( $line_1 =~ m/\t/ ) {
-    print STDERR "Validation error: FastQ read file contains a tab: $input_file_1\n";
+    print STDERR "Validation error: FastQ read file contains a tab: $mate1s\n";
     die;
   }
   if ( $line_2 =~ m/\t/ ) {
-    print STDERR "Validation error: FastQ read file contains a tab: $input_file_2\n";
+    print STDERR "Validation error: FastQ read file contains a tab: $mate2s\n";
     die;
   }
   $line_count = ($line_count + 1) % 4;

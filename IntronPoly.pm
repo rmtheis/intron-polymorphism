@@ -39,7 +39,7 @@ sub new {
   my $self = {};
   $self->{"scripts_dir"}    = undef;   # Scalar path to scripts directory
   $self->{"work_dir"}       = undef;   # Scalar path to work directory
-  $self->{"reads_basename"} = undef;   # Scalar base filename for read pairs/data
+  $self->{"reads"}          = undef;   # Hash of reads related values
   $self->{"ref_genome"}     = undef;   # Hash of reference genome related values
   $self->{"bowtie_db"}      = undef;   # Hash of data directories for bowtie
   $self->{"alignment_file"} = undef;   # Scalar path to initial read pairs alignments
@@ -100,23 +100,26 @@ sub set_work_dir {
  Example : my $ref_genome = "/home/theis/genome/mygenome.fna";
            $project->build_db( $ref_genome, "reads" );
  Returns : No return value
- Args    : Scalar of full path to the reference genome Fasta file, and a scalar of the base
-           name of the read pairs files (filename without "_1.fq" or "_2.fq" ending)
+ Args    : Scalar of full path to the reference genome Fasta file, scalar of the FastQ
+           file containing mate 1s, and scalar of the FastQ file containing mate 2s
 
 =cut
 
 sub build_db {
   my $self                 = shift;
   my $ref_genome_filename  = shift;
-  my $reads_basename       = shift;
+  my $mate1s               = shift;
+  my $mate2s               = shift;
 
   die "Cannot find $ref_genome_filename" if !(-e $ref_genome_filename);
-  die "Cannot find ${reads_basename}_1.fq" if !(-e "${reads_basename}_1.fq");
-  die "Cannot find ${reads_basename}_2.fq" if !(-e "${reads_basename}_2.fq");
+  die "Cannot find $mate1s" if !(-e $mate1s);
+  die "Cannot find $mate2s" if !(-e $mate2s);
   
   # Use the base of the read pairs filenames for saving data throughout pipeline
   {
-    my ( $file, $dir, $ext ) = fileparse( $reads_basename, qr/\.[^.]*/ );
+    my ( $file, $dir, $ext ) = fileparse( $mate1s, qr/\.[^.]*/ );
+    $self->{"reads"}->{"mate1s"}   = $mate1s;
+    $self->{"reads"}->{"mate2s"}   = $mate2s;
     $self->{"reads"}->{"basename"} = $file;
     $self->{"reads"}->{"dir"}      = $dir;
   }
@@ -157,7 +160,8 @@ sub mapping_setup {
   my $ref_genome_basename  = $self->{"ref_genome"}->{"basename"};
   my $ref_genome_dir       = $self->{"ref_genome"}->{"dir"};
   my $reads_dir            = $self->{"reads"}->{"dir"};
-  my $reads_basename       = $self->{"reads"}->{"basename"};
+  my $mate1s               = $self->{"reads"}->{"mate1s"};
+  my $mate2s               = $self->{"reads"}->{"mate2s"};
   die "$0: reference genome directory $ref_genome_dir does not exist" unless ( -d $ref_genome_dir );
   
   print "Validating Fasta reference genome data...\n";
@@ -168,15 +172,13 @@ sub mapping_setup {
 
   # Ensure that read pairs files exist
   $reads_dir =~ s!/*$!/! if ($reads_dir ne ""); # Add trailing slash if not already present
-  my $reads_file_one = "${reads_dir}${reads_basename}_1.fq";
-  my $reads_file_two = "${reads_dir}${reads_basename}_2.fq";
-  die "$0: reads file $reads_file_one does not exist" unless ( -e $reads_file_one );
-  die "$0: reads file $reads_file_two does not exist" unless ( -e $reads_file_two );
-
+  die "$0: reads file $mate1s does not exist" unless ( -e $mate1s );
+  die "$0: reads file $mate2s does not exist" unless ( -e $mate2s );
+  
   if ($validate_reads) {
     # Perform basic validation on read pairs files
     print "Validating Fastq read pair data...\n";   
-    capture("${scripts_dir}validate_fastq.pl -i ${reads_dir}$reads_basename");
+    capture("${scripts_dir}validate_fastq.pl -1 ${reads_dir}$mate1s -2 ${reads_dir}$mate2s");
     die "$0: validate_fastq.pl exited unsuccessful" if ( $EXITVAL != 0 );
   }
 
@@ -188,13 +190,13 @@ sub mapping_setup {
 
   # Remember paths needed for running
   $self->{"bowtie_db"} = {
-    reads_file_one => $reads_file_one,
-    reads_file_two => $reads_file_two
+    reads_file_one => $mate1s,
+    reads_file_two => $mate2s
   };
   $self->{"index_dir"} = $index_dir;
   print "Using reference genome $ref_genome\n";
-  print "Using reads file 1: $reads_file_one\n";
-  print "Using reads file 2: $reads_file_two\n";
+  print "Using Fastq file: $mate1s\n";
+  print "Using Fastq file: $mate2s\n";
 }
 
 =head2 build_bowtie_index
@@ -248,12 +250,14 @@ sub run_bowtie_mapping {
   my $num_threads           = shift;
   my $minins                = shift;
   my $maxins                = shift;
-  my $reads_basename        = $self->{"reads"}->{"basename"};
+  my $mate1s                = $self->{"reads"}->{"mate1s"};
+  my $mate2s                = $self->{"reads"}->{"mate2s"};
   my $ref_genome_basename   = $self->{"ref_genome"}->{"basename"};
   my $index_dir             = $self->{"index_dir"};
   my $reads_file_one        = $self->{"bowtie_db"}->{"reads_file_one"};
   my $reads_file_two        = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir              = $self->{"work_dir"};
+  my $reads_basename        = $self->{"reads"}->{"basename"};
   my $output_file           = "$work_dir/${reads_basename}_initial_alignments.sam";
   $self->{"alignment_file"} = $output_file;
   print "Running mapping using Bowtie, using $num_threads threads...\n";

@@ -16,6 +16,7 @@
 
 use strict;
 use FindBin;
+use lib $FindBin::Bin;
 use IntronPoly;
 use Getopt::Long;
 use Sys::CPU;
@@ -26,7 +27,8 @@ my $usage_msg = "Usage:\n"
   . "\n"
   . "Required Arguments:\n"
   . "    -g/--ref-genome              <string>\n"
-  . "    -r/--reads-basename          <string>\n"
+  . "    -1/--mate1-file              <string>\n"
+  . "    -2/--mate2-file              <string>\n"
   . "\n"
   . "Options:\n"
   . "    -o/--output-dir               <string>     [ default: ./ip_out  ]\n"
@@ -50,7 +52,8 @@ my $usage_msg = "Usage:\n"
 ##################################
 
 my $ref_genome_file = undef;            # Reference genome (FastA format)
-my $reads_basename = undef;             # Read pairs basename, without "_1.fq" or "_2.fq" extension (FastQ format)
+my $mate1s = undef;                     # File containing mate 1s in FastQ format
+my $mate2s = undef;                     # File containing mate 2s in FastQ format
 my $output_dir = undef;                 # Directory to put output files in
 my $fragment_length = undef;            # Outer distance between mates
 my $min_mates = undef;                  # Minimum number of nearby half-mapping mates for local assembly
@@ -75,7 +78,8 @@ my $help;                               # Flag to print usage message and exit
 # Parse command-line options, overriding any options set above
 GetOptions(
   "g|ref-genome=s" => \$ref_genome_file,
-  "r|reads-basename=s" => \$reads_basename,
+  "1|mate1-file=s" => \$mate1s,
+  "2|mate2-file=s" => \$mate2s,
   "o|output-dir:s" => \$output_dir,
   "f|fragment-length:i" => \$fragment_length,
   "a|min-mates:i" => \$min_mates,
@@ -93,7 +97,7 @@ GetOptions(
   "v|version" => \$version,
   "h|help" => \$help,
 ) || die "$0: Bad option";
-die $usage_msg unless ( (defined $ref_genome_file && defined $reads_basename)
+die $usage_msg unless ( (defined $ref_genome_file && defined $mate1s && defined $mate2s)
                        || defined $version || defined $help );
 
 # Use defaults for undefined values
@@ -139,7 +143,8 @@ if ( $skip_to eq "L" && !defined $existing_contigs_file ) {
 }
 
 # Resolve relative pathnames
-$reads_basename =~ s/^~/$ENV{HOME}/;
+$mate1s =~ s/^~/$ENV{HOME}/;
+$mate2s =~ s/^~/$ENV{HOME}/;
 $ref_genome_file =~ s/^~/$ENV{HOME}/;
 $output_dir =~ s/^~/$ENV{HOME}/;
 $index_dir =~ s/^~/$ENV{HOME}/;
@@ -157,7 +162,8 @@ my $work_dir = $project->set_work_dir( $output_dir, $scripts_dir );
 # Set paths to data used throughout pipeline
 $project->build_db(
   $ref_genome_file,
-  $reads_basename,
+  $mate1s,
+  $mate2s
 );
 
 # Ensure required executables are available
