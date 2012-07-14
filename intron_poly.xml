@@ -1,5 +1,7 @@
+<!-- Galaxy Tool Definition File -->
 <tool id="intron_poly" name="intron-polymorphism" version="0.1">
   <description></description>
+  <version_command>ip_handler.pl --version</version_command>
   <command interpreter="perl">
     ip_handler.pl 
       --ref-genome $ref_genome 
