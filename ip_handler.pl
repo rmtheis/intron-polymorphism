@@ -209,7 +209,7 @@ ALIGNMENT:
 $project->align_groups_clustal( $existing_contigs_file );
 
 # Copy latest run to "run-latest" directory for quickly locating the last-run results
-system( "rm -rf run-latest/*" );
-system( "cp -R $work_dir/* run-latest" );
+#system( "rm -rf run-latest/*" );
+#system( "cp -R $work_dir/* run-latest" );
 
 exit;

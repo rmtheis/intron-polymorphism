@@ -260,7 +260,7 @@ sub run_bowtie_mapping {
   my $reads_basename        = $self->{"reads"}->{"basename"};
   my $output_file           = "$work_dir/${reads_basename}_initial_alignments.sam";
   $self->{"alignment_file"} = $output_file;
-  print "Running mapping using Bowtie, using $num_threads threads...\n";
+  print "Mapping using Bowtie, using $num_threads threads...\n";
   
   # Call Bowtie to run the mapping
   capture(
@@ -270,7 +270,7 @@ sub run_bowtie_mapping {
       . "--no-discordant "
       . "--no-contain --no-overlap "
       . "-k 3 -1 $reads_file_one -2 $reads_file_two "
-      . "-S $output_file"
+      . "-S $output_file 2> $work_dir/bowtie2_initial_mapping_stats.txt"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
   print "Saved alignment data to $output_file\n";
@@ -548,7 +548,7 @@ sub align_simulated_pairs {
       . "--threads $num_threads --reorder --no-hd "
       . "--no-mixed --no-discordant --no-contain --no-overlap "
       . "-1 $pairs_file_1 -2 $pairs_file_2 "
-      . "-S $outfile"
+      . "-S $outfile 2> $work_dir/bowtie2_sim_pairs_stats.txt"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
 }
@@ -752,7 +752,8 @@ sub assemble_groups {
       $ofh->close;
       $ofh2->close;
 
-      capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 1" );
+      capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 1"
+           . " >> $work_dir/taipan_output.txt 2>&1" );
       die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Append this group's results to the multi-FastA output file containing all contigs
@@ -799,7 +800,8 @@ sub assemble_groups {
     $ofh->close;
     $ofh2->close;
 
-    capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 1" );
+    capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 1"
+           . " >> $work_dir/taipan_output.txt 2>&1" );
     die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
     # Append this group's results to the multi-FastA output file containing all contigs
