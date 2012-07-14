@@ -402,7 +402,7 @@ sub bowtie_identify {
     print STDERR "No half-mapping read pairs found.\n";
     exit;
   }
-  print "Saved $count half-mapping read pair alignments to $outfile\n";
+  print "Saved $count half-mapping read pair alignments.\n";
   print "Sorting...\n";
   capture( "sort -k3,3 -k8n,8 -o $outfile3 $outfile" );
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
@@ -884,7 +884,7 @@ sub align_groups_blast() {
   capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file" );
   die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
   
-  print "Alignment results saved to $output_file\n";
+  print "Alignment results saved.\n";
 }
 
 =head2 align_groups_clustal
@@ -904,14 +904,12 @@ sub align_groups_blast() {
 sub align_groups_clustal() {
   my $self                          = shift;
   my $contigs_file                  = shift || $self->{"contigs_file"};
+  my $work_dir                      = $self->{"work_dir"};
   my $reads_basename                = $self->{"reads"}->{"basename"};
+  my $output_file                   = shift || "$work_dir/${reads_basename}_trimmed.aln";
   my $ref_genome                    = $self->{"ref_genome"}->{"full_pathname"};
   my $scripts_dir                   = $self->{"scripts_dir"};
-  my $work_dir                      = $self->{"work_dir"};
-  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned.aln";
-  $self->{"contigs_alignment_file"} = $output_file;
-  my $output_file_trimmed           = $output_file;
-  $output_file_trimmed              =~ s/(\.[^.]+)$/_trimmed.aln/;
+  my $output_file_alignment         = "$work_dir/${reads_basename}_contigs.aln";
   my $clustal_input_file            = "$work_dir/${reads_basename}_pre-alignment";
 
   return if (-z $contigs_file || !(-e $contigs_file));
@@ -922,16 +920,15 @@ sub align_groups_clustal() {
   die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
   
   # Call Clustal to run the mapping
-  capture( "clustalw -infile=$clustal_input_file -gapopen=50 -gapext=0.01 -outfile=$output_file" );
+  capture( "clustalw -infile=$clustal_input_file -gapopen=50 -gapext=0.01 -outfile=$output_file_alignment" );
   die "$0: clustalw exited unsuccessful" if ( $EXITVAL != 0 );
   
   # Save a truncated version of the Clustal results
-  if (-e $output_file && !(-z $output_file)) { 
-    capture("${scripts_dir}trim_clustal.pl -i $output_file -m 100 > $output_file_trimmed");
+  if (-e $output_file_alignment && !(-z $output_file_alignment)) { 
+    capture("${scripts_dir}trim_clustal.pl -i $output_file_alignment -m 100 > $output_file");
     die "$0: trim_clustal.pl exited unsuccessful" if ( $EXITVAL != 0 );
   }
-  print "Alignment results saved to $output_file\n";
-  print "Trimmed alignment results saved to $output_file_trimmed\n"
+  print "Trimmed alignment results saved to $output_file\n"
 }
 
 ############ Subroutines for internal use by this module ############

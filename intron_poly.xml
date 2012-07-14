@@ -1,0 +1,21 @@
+<tool id="intron_poly" name="intron-polymorphism" version="0.1">
+  <description></description>
+  <command interpreter="perl">
+    ip_handler.pl 
+      --ref-genome $ref_genome 
+      -1 $mate1s 
+      -2 $mate2s 
+      --output-file $output_file
+  </command>
+  <inputs>
+    <param format="fastqillumina" name="mate1s" type="data" label="Select FASTQ file 1" />
+    <param format="fastqillumina" name="mate2s" type="data" label="Select FASTQ file 2" />
+    <param format="fasta" name="ref_genome" type="data" label="Select reference genome" />
+  </inputs>
+  <outputs>
+    <data format="txt" name="output_file" label="intron-poly results" />
+  </outputs>
+  <help>
+  	Runs the ip_handler.pl script.
+  </help>
+</tool>

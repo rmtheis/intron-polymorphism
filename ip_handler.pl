@@ -55,6 +55,7 @@ my $ref_genome_file = undef;            # Reference genome (FastA format)
 my $mate1s = undef;                     # File containing mate 1s in FastQ format
 my $mate2s = undef;                     # File containing mate 2s in FastQ format
 my $output_dir = undef;                 # Directory to put output files in
+my $output_file = undef;                # Filename to save alignment to; for Galaxy
 my $fragment_length = undef;            # Outer distance between mates
 my $min_mates = undef;                  # Minimum number of nearby half-mapping mates for local assembly
 my $min_contig_length;                  # Minimum contig length for local assembly
@@ -81,6 +82,7 @@ GetOptions(
   "1|mate1-file=s" => \$mate1s,
   "2|mate2-file=s" => \$mate2s,
   "o|output-dir:s" => \$output_dir,
+  "u|output-file:s" => \$output_file,
   "f|fragment-length:i" => \$fragment_length,
   "a|min-mates:i" => \$min_mates,
   "l|min-contig-length:s" => \$min_contig_length,
@@ -102,6 +104,7 @@ die $usage_msg unless ( (defined $ref_genome_file && defined $mate1s && defined 
 
 # Use defaults for undefined values
 $output_dir = $output_dir || "./ip_out/";
+$output_file = $output_file || "";
 $fragment_length = $fragment_length || -1;
 $min_mates = $min_mates || 3;
 $min_contig_length = $min_contig_length || 16;
@@ -206,7 +209,7 @@ $project->assemble_groups( $intron_length, $min_mates, $min_contig_length, $exis
 ALIGNMENT:
 #$project->build_blast_index( $index_dir );
 #$project->align_groups_blast( $existing_contigs_file );
-$project->align_groups_clustal( $existing_contigs_file );
+$project->align_groups_clustal( $existing_contigs_file, $output_file );
 
 # Copy latest run to "run-latest" directory for quickly locating the last-run results
 #system( "rm -rf run-latest/*" );
