@@ -34,14 +34,11 @@ that determines whether mates are close enough together to form a group. (-m)" /
       </when>
       <when value="no" />
     </conditional>
+    <param name="num_threads" type="boolean" truevalue="true" falsevalue="false" checked="no" label="Validate the FASTQ reads files? (--validate-reads)" help="" />
     <!-- skip-to: needs drop-down select -->
     <!-- existing-bwt-index-dir -->
     <!-- existing-align-file -->
     <!-- existing-contigs-file -->
-    <param name="validateReads" type="select" label="Validate the FASTQ reads files (--validate-reads)">
-      <option value="false">No (default)</option>
-      <option value="true">Yes</option>
-    </param>
   </inputs>
   
   <outputs>
