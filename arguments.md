@@ -33,7 +33,7 @@ The minimum contig length needed for assembline the mates in a group. This value
     -m/--max-intron-length
 
 The intron length value to use when looking for groups of introns near one another. This value contributes to a distance value
-that determines whether mates are close enough together to form a group.
+that determines whether mates are close enough together to form a group. Default is 250.
 
     -I/--minins
 
