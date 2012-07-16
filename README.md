@@ -26,14 +26,11 @@ Install required Perl modules:
 Install project code:
 
     git clone git://github.com/rmtheis/intron-polymorphism.git
-    cd intron-polymorphism
-    chmod u+x intron-polymorphism/*.pl
 
 ## RUNNING
 
     cd intron-polymorphism
-    export PERL5LIB=`pwd`
-    ip_handler.pl --ref-genome genome.fa -1 myfile_1.fa -2 myfile_2.fa
+    perl ip_handler.pl --ref-genome genome.fa -1 myfile_1.fa -2 myfile_2.fa
 
 ## LICENSE
 
