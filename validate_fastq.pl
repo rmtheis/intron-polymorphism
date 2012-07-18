@@ -31,7 +31,7 @@ use IO::File;
 #
 
 my $usage_msg = "Performs basic validation on a Fastq file.\n"
-              . "Usage: validate_fastq.pl -1 fastq_file_1 -2 fastq_file_2\n"
+              . "Usage: validate_fastq.pl -1 fastq_file_1 -2 fastq_file_2\n";
 die $usage_msg unless ( @ARGV );
 my ( $mate1s, $mate2s );
 GetOptions(
