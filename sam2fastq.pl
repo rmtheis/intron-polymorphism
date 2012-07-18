@@ -34,6 +34,7 @@ my $input_file;
 GetOptions( "i=s" =>\$input_file ) || die "$0: Bad option";
 die $usage_msg unless ( defined $input_file );
 
+$input_file =~ s/^~/$ENV{HOME}/;
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
 while ( my $line = $ifh->getline ) {
   next if $line =~ m/^@/;

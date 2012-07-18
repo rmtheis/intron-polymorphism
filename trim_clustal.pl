@@ -38,6 +38,7 @@ GetOptions(
 ) || die "$0: Bad option";
 die $usage_msg unless ( defined $input_file );
 
+$input_file =~ s/^~/$ENV{HOME}/;
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
 my $first_line = $ifh->getline;
 print STDERR "Warning: first line does not begin with 'CLUSTAL'\n" if $first_line !~ m/^CLUSTAL/;

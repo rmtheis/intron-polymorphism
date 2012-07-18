@@ -35,6 +35,7 @@ GetOptions(
 ) || die "$0: Bad option";
 die $usage_msg unless ( defined $input_file );
 
+$input_file =~ s/^~/$ENV{HOME}/;
 my $ifh = IO::File->new( $input_file, 'r' ) or die "Can't open $input_file: $!";
 my %fragments = ();
 while ( my $line1 = $ifh->getline ) {

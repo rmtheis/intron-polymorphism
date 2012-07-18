@@ -36,6 +36,10 @@ GetOptions(
   ) || die "$0: Bad option";
 die $usage_msg unless ( defined $mate1s && defined $mate2s && defined $out1 && defined $out2);
 
+$mate1s =~ s/^~/$ENV{HOME}/;
+$mate2s =~ s/^~/$ENV{HOME}/;
+$out1 =~ s/^~/$ENV{HOME}/;
+$out2 =~ s/^~/$ENV{HOME}/;
 my $ifh1 = new IO::File( $mate1s, 'r' ) or die "Can't open $mate1s: $!";
 my $ifh2 = new IO::File( $mate2s, 'r' ) or die "Can't open $mate2s: $!";
 my $ofh1 = new IO::File( $out1, 'w' ) or die "Can't open $out1: $!";

@@ -46,6 +46,8 @@ if ( `wc -l $mate1s | cut -d ' ' -f 1` != `wc -l $mate2s | cut -d ' ' -f 1` ) {
   die;
 }
 
+$mate1s =~ s/^~/$ENV{HOME}/;
+$mate2s =~ s/^~/$ENV{HOME}/;
 my $ifh1 = new IO::File( $mate1s, 'r' ) or die "Can't open $mate1s: $!";
 my $ifh2 = new IO::File( $mate2s, 'r' ) or die "Can't open $mate2s: $!";
 
