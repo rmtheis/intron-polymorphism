@@ -66,4 +66,6 @@ while ( my $line_1 = $ifh1->getline ) {
 }
 $ifh1->close;
 $ifh2->close;
+$ofh1->close;
+$ofh2->close;
 exit;

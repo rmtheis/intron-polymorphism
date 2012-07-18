@@ -32,8 +32,8 @@ my $input_file;
 my $margin_size = 100;
 my $suppress_line_numbers = 0;
 GetOptions(
-   "i|input=s" =>\$input_file,
-   "m|margin:i" =>\$margin_size, # Length of sequence to show before/after aligned regions
+   "i|input=s" => \$input_file,
+   "m|margin:i" => \$margin_size, # Length of sequence to show before/after aligned regions
    "n|no-num" => \$suppress_line_numbers
 ) || die "$0: Bad option";
 die $usage_msg unless ( defined $input_file );
