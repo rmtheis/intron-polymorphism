@@ -34,7 +34,7 @@ my $usage_msg = "Usage:\n"
   . "    -o/--output-dir               <string>     [ default: ./ip_out  ]\n"
   . "    -f/--fragment-length          <int>        [ default: detect    ]\n"
   . "    -a/--min-mates                <int>        [ default: 3         ]\n"
-  . "    -l/--min-contig-length        <int>        [ default: 16        ]\n"
+  . "    -l/--min-contig-length        <int>        [ default: 70        ]\n"
   . "    -m/--max-intron-length        <int>        [ default: 250       ]\n"
   . "    -I/--minins                   <int>        [ default: 0         ]\n"
   . "    -X/--maxins                   <int>        [ default: 3000      ]\n"
@@ -107,7 +107,7 @@ $output_dir = $output_dir || "./ip_out/";
 $output_file = $output_file || "";
 $fragment_length = $fragment_length || -1;
 $min_mates = $min_mates || 3;
-$min_contig_length = $min_contig_length || 16;
+$min_contig_length = $min_contig_length || 70;
 $intron_length = $intron_length || 250;
 $minins = $minins || 0;
 $maxins = $maxins || 3000;
