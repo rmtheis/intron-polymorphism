@@ -43,7 +43,7 @@ my $ofh2 = new IO::File( $out2, 'w' ) or die "Can't open $out2: $!";
 my $line_count = 0;
 while ( my $line_1 = $ifh1->getline ) {
   my $line_2 = $ifh2->getline;
-  if ( $line_count == 1 ) {
+  if ( $line_count == 1 || $line_count == 3 ) {
     my $trimmed1 = $line_1;
     my $trimmed2 = $line_2;
     $trimmed1 =~ s/\s+$//;
