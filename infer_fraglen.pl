@@ -36,6 +36,7 @@ die $usage_msg unless ( defined $input_file );
 
 my $ifh = IO::File->new( $input_file, 'r' ) or die "Can't open $input_file: $!";
 my %fragments = ();
+my $count = 0;
 while ( my $line1 = $ifh->getline ) {
   next if $line1 =~ m/^@/;
   my @fields = split(/\t/, $line1);
@@ -51,6 +52,8 @@ while ( my $line1 = $ifh->getline ) {
   # Round to nearest bin
   my $frag = int( (abs($frag1) + ($bin_size / 2)) / $bin_size );
   $fragments{$frag}++;
+  $count++;
+  last if ($count == 100000);
 }
 $ifh->close;
 
