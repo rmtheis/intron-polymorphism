@@ -30,7 +30,7 @@ Install project code:
 ## RUNNING
 
     cd intron-polymorphism
-    perl ip_handler.pl --ref-genome genome.fa -1 myfile_1.fa -2 myfile_2.fa
+    perl ip_handler.pl --ref-genome genome.fa -1 myfile_1.fq -2 myfile_2.fq
 
 ## LICENSE
 
