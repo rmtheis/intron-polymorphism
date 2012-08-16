@@ -100,7 +100,7 @@ GetOptions(
   "h|help" => \$help,
 ) || die "$0: Bad option";
 die $usage_msg unless ( (defined $ref_genome_file && defined $mate1s && defined $mate2s)
-    || (defined $ref_genome_file && (defined $existing_halfmapping_file || defined $existing_contigs_file)                
+    || (defined $ref_genome_file && (defined $existing_halfmapping_file || defined $existing_contigs_file))
     || defined $version || defined $help );
 
 # Use defaults for undefined values
