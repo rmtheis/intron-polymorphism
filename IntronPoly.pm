@@ -118,6 +118,7 @@ sub build_db {
   # Use the base of the read pairs filenames for saving data throughout pipeline
   {
     my ( $file, $dir, $ext ) = fileparse( $mate1s, qr/\.[^.]*/ );
+    $file =~ s/_1$//;
     $self->{"reads"}->{"mate1s"}   = $mate1s;
     $self->{"reads"}->{"mate2s"}   = $mate2s;
     $self->{"reads"}->{"basename"} = $file;
@@ -335,7 +336,8 @@ sub run_bowtie1_mapping {
   my $reads_file_two        = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir              = $self->{"work_dir"};
   my $reads_basename        = $self->{"reads"}->{"basename"};
-  my $output_file           = "$work_dir/${reads_basename}";
+  my $prefix                = "$work_dir/${reads_basename}";
+  my $output_file           = "${prefix}_initial_alignments.sam";
   $self->{"alignment_file"} = $output_file;
   print "Mapping using Bowtie, using $num_threads threads...\n";
   
@@ -343,12 +345,9 @@ sub run_bowtie1_mapping {
   capture(
         "bowtie $index_dir/$ref_genome_basename " .
         "--threads $num_threads " .
-        "--un ${output_file}_unaligned.fq " . 
+        "--un ${prefix}_initial_unaligned.fq " . 
         "-m 1 -1 $reads_file_one -2 $reads_file_two " .
-        #"--al ${output_file}_aligned.fq " .
-	#"--sam " .
-        #"${output_file}_hits.sam " .
-	"2> $work_dir/bowtie1_initial_mapping_stats.txt"
+        "-S $output_file 2> $work_dir/bowtie1_initial_mapping_stats.txt"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
 
@@ -357,9 +356,9 @@ sub run_bowtie1_mapping {
   capture(
         "bowtie $index_dir/$ref_genome_basename " .
         "--threads $num_threads " .
-        "-m 1 ${output_file}_unaligned_1.fq " . 
-        "--al ${output_file}_1_halfmapping.1.fq " . 
-        #"${output_file}_mate1_hits.map " .
+        "-m 1 ${prefix}_initial_unaligned_1.fq " . 
+        "--al ${prefix}_1_halfmapping.1.fq " . 
+        "--sam ${prefix}_mate1.sam " .
 	"2> $work_dir/bowtie1_secondary_mapping_stats1.txt"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
@@ -367,46 +366,48 @@ sub run_bowtie1_mapping {
   capture(
         "bowtie $index_dir/$ref_genome_basename " .
         "--threads $num_threads " .
-        "-m 1 ${output_file}_unaligned_2.fq " . 
-        "--al ${output_file}_2_halfmapping.2.fq " . 
-        #"${output_file}_mate2_hits.map " .
+        "-m 1 ${prefix}_initial_unaligned_2.fq " . 
+        "--al ${prefix}_2_halfmapping.2.fq " . 
+        "--sam ${prefix}_mate2.sam " .
 	"2> $work_dir/bowtie1_secondary_mapping_stats2.txt"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
 
   # Gather the corresponding mates that are paired with our identified half-mapping mates
   print "Gathering mates...\n";
-  _find_mates("${output_file}_1_halfmapping.1.fq",
-              "${output_file}_unaligned_2.fq",
-              "${output_file}_1_halfmapping.2.fq");
-  _find_mates("${output_file}_2_halfmapping.2.fq",
-              "${output_file}_unaligned_1.fq",
-              "${output_file}_2_halfmapping.1.fq");
+  _find_mates("${prefix}_1_halfmapping.1.fq",
+              "${prefix}_initial_unaligned_2.fq",
+              "${prefix}_1_halfmapping.2.fq");
+  _find_mates("${prefix}_2_halfmapping.2.fq",
+              "${prefix}_initial_unaligned_1.fq",
+              "${prefix}_2_halfmapping.1.fq");
+  unlink "${prefix}_initial_unaligned_1.fq" or die "Can't delete ${prefix}_initial_unaligned_2.fq: $!";
+  unlink "${prefix}_initial_unaligned_2.fq" or die "Can't delete ${prefix}_initial_unaligned_2.fq: $!";
 
   # Concatenate the results
-  system( "cat ${output_file}_1_halfmapping.1.fq " .
-          "${output_file}_2_halfmapping.1.fq > " .
-          "${output_file}_halfmapping.1.fq_unsorted.tmp" );
-  unlink "${output_file}_1_halfmapping.1.fq"
-          or die "Can't delete ${output_file}_1_halfmapping.1.fq: $!";
-  system( "cat ${output_file}_1_halfmapping.2.fq " .
-          "${output_file}_2_halfmapping.2.fq > " .
-          "${output_file}_halfmapping.2.fq_unsorted.tmp" );
-  unlink "${output_file}_2_halfmapping.2.fq"
-          or die "Can't delete ${output_file}_2_halfmapping.2.fq: $!";
+  system( "cat ${prefix}_1_halfmapping.1.fq " .
+          "${prefix}_2_halfmapping.1.fq > " .
+          "${prefix}_halfmapping.1.fq_unsorted.tmp" );
+  unlink "${prefix}_1_halfmapping.1.fq" or die "Can't delete ${prefix}_1_halfmapping.1.fq: $!";
+  unlink "${prefix}_2_halfmapping.1.fq" or die "Can't delete ${prefix}_2_halfmapping.1.fq: $!";
+  system( "cat ${prefix}_1_halfmapping.2.fq " .
+          "${prefix}_2_halfmapping.2.fq > " .
+          "${prefix}_halfmapping.2.fq_unsorted.tmp" );
+  unlink "${prefix}_1_halfmapping.2.fq" or die "Can't delete ${prefix}_1_halfmapping.2.fq: $!";
+  unlink "${prefix}_2_halfmapping.2.fq" or die "Can't delete ${prefix}_2_halfmapping.2.fq: $!";
 
   # Sort our mates by ID and save the sorted output files
-  _sort_fastq_by_id( "${output_file}_halfmapping.1.fq_unsorted.tmp",
-                     "${output_file}_halfmapping.1.fq" );
-  unlink "${output_file}_halfmapping.1.fq_unsorted.tmp"
-          or die "Can't delete ${output_file}_halfmapping.1.fq_unsorted.tmp: $!";
-  _sort_fastq_by_id( "${output_file}_halfmapping.2.fq_unsorted.tmp",
-                     "${output_file}_halfmapping.2.fq" );
-  unlink "${output_file}_halfmapping.2.fq_unsorted.tmp"
-          or die "Can't delete ${output_file}_halfmapping.2.fq_unsorted.tmp: $!";
+  _sort_fastq_by_id( "${prefix}_halfmapping.1.fq_unsorted.tmp",
+                     "${prefix}_halfmapping.1.fq" );
+  unlink "${prefix}_halfmapping.1.fq_unsorted.tmp"
+          or die "Can't delete ${prefix}_halfmapping.1.fq_unsorted.tmp: $!";
+  _sort_fastq_by_id( "${prefix}_halfmapping.2.fq_unsorted.tmp",
+                     "${prefix}_halfmapping.2.fq" );
+  unlink "${prefix}_halfmapping.2.fq_unsorted.tmp"
+          or die "Can't delete ${prefix}_halfmapping.2.fq_unsorted.tmp: $!";
   print "Half-mapping read pairs are saved:\n";
-  print "Created ${output_file}_halfmapping.1.fq\n";
-  print "Created ${output_file}_halfmapping.2.fq\n";
+  print "Created ${prefix}_halfmapping.1.fq\n";
+  print "Created ${prefix}_halfmapping.2.fq\n";
 
 }
 
@@ -1189,7 +1190,7 @@ sub _find_mates {
   # Open the unpaired mates file
   my $ifh = new IO::File($unpaired_mates, 'r') or die "$0: Can't open $unpaired_mates: $!";
 
-  # Loop through the unpaired mates file and get all the search IDs
+  # Loop through the fastq unpaired mates file and get all the search IDs
   my $line_count = 0;
   my $line = 0;
   my $combined_search = "";
@@ -1201,7 +1202,8 @@ sub _find_mates {
       chomp( $id );
       $id =~ s/\/[12]$//;
 
-      # Append this ID to the combined search string
+      # Append this ID to the combined search string using alternation metacharacter
+      # Combined search string will look like r4|r12|r21|r36|r142|r141|r153
       if ( $combined_search ne "" ) {
         $combined_search = $combined_search . "|$id";
       } else {
