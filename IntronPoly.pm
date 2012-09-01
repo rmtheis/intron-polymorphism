@@ -231,6 +231,38 @@ sub build_bowtie_index {
   }
 }
 
+=head2 build_bowtie1_index
+
+ Title   : build_bowtie1_index
+ Usage   : $project->build_bowtie1_index();
+ Function: Runs the bowtie-build indexer to create a Bowtie v1 index from the reference genome
+ Example : $project->mapping_setup( $index_dir, $reads_dir, "reads" );
+           $project->build_bowtie1_index();
+ Returns : No return value
+ Args    : Directory containing Bowtie index files (optional)
+
+=cut
+
+sub build_bowtie1_index { 
+  my $self                = shift;
+  my $index_dir           = shift || $self->{"index_dir"};
+  my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  $self->{"index_dir"}    = $index_dir;
+  unless ( -e "$index_dir/$ref_genome_basename.1.ebwt"
+    && "$index_dir/$ref_genome_basename.2.ebwt"
+    && "$index_dir/$ref_genome_basename.3.ebwt"
+    && "$index_dir/$ref_genome_basename.4.ebwt"
+    && "$index_dir/$ref_genome_basename.rev.1.ebwt"
+    && "$index_dir/$ref_genome_basename.rev.2.ebwt" )
+  {
+    # Create the Bowtie index
+    print "Creating bowtie index in $index_dir...\n";
+    capture( "bowtie-build $ref_genome $index_dir/$ref_genome_basename" );
+    die "$0: bowtie-build exited unsuccessful" if ( $EXITVAL != 0 );
+  }
+}
+
 =head2 run_bowtie_mapping
 
  Title   : run_bowtie_mapping
@@ -274,6 +306,108 @@ sub run_bowtie_mapping {
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
   print "Saved alignment data to $output_file\n";
+}
+
+=head2 run_bowtie1_mapping
+
+ Title   : run_bowtie1_mapping
+ Usage   : $project->run_bowtie1_mapping( num_threads, minins, maxins )
+ Function: Aligns reads to the reference genome and saves output file using Bowtie v1
+ Example : $project->mapping_setup( $index_dir, $reads_dir, "reads" );
+           $project->build_bowtie1_index();
+           $project->run_bowtie1_mapping( 8, 100, 500 );
+ Returns : No return value
+ Args    : Number of parallel search threads to use for Bowtie, numeric length to use for
+           Bowtie -I/--minins parameter, numeric length to use for Bowtie -X/--maxins parameter
+
+=cut
+
+sub run_bowtie1_mapping {
+  my $self                  = shift;
+  my $num_threads           = shift;
+  my $minins                = shift;
+  my $maxins                = shift;
+  my $mate1s                = $self->{"reads"}->{"mate1s"};
+  my $mate2s                = $self->{"reads"}->{"mate2s"};
+  my $ref_genome_basename   = $self->{"ref_genome"}->{"basename"};
+  my $index_dir             = $self->{"index_dir"};
+  my $reads_file_one        = $self->{"bowtie_db"}->{"reads_file_one"};
+  my $reads_file_two        = $self->{"bowtie_db"}->{"reads_file_two"};
+  my $work_dir              = $self->{"work_dir"};
+  my $reads_basename        = $self->{"reads"}->{"basename"};
+  my $output_file           = "$work_dir/${reads_basename}";
+  $self->{"alignment_file"} = $output_file;
+  print "Mapping using Bowtie, using $num_threads threads...\n";
+  
+  # Call Bowtie to run the initial mapping
+  capture(
+        "bowtie $index_dir/$ref_genome_basename " .
+        "--threads $num_threads " .
+        "--un ${output_file}_unaligned.fq " . 
+        "-m 1 -1 $reads_file_one -2 $reads_file_two " .
+        #"--al ${output_file}_aligned.fq " .
+	#"--sam " .
+        #"${output_file}_hits.sam " .
+	"2> $work_dir/bowtie1_initial_mapping_stats.txt"
+  );
+  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+
+  # Identify the half-mapping read pairs. Read pairs are already those that align uniquely to the
+  # reference sequence because Bowtie 1 was run with option '-m 1'.
+  capture(
+        "bowtie $index_dir/$ref_genome_basename " .
+        "--threads $num_threads " .
+        "-m 1 ${output_file}_unaligned_1.fq " . 
+        "--al ${output_file}_1_halfmapping.1.fq " . 
+        #"${output_file}_mate1_hits.map " .
+	"2> $work_dir/bowtie1_secondary_mapping_stats1.txt"
+  );
+  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+
+  capture(
+        "bowtie $index_dir/$ref_genome_basename " .
+        "--threads $num_threads " .
+        "-m 1 ${output_file}_unaligned_2.fq " . 
+        "--al ${output_file}_2_halfmapping.2.fq " . 
+        #"${output_file}_mate2_hits.map " .
+	"2> $work_dir/bowtie1_secondary_mapping_stats2.txt"
+  );
+  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+
+  # Gather the corresponding mates that are paired with our identified half-mapping mates
+  print "Gathering mates...\n";
+  _find_mates("${output_file}_1_halfmapping.1.fq",
+              "${output_file}_unaligned_2.fq",
+              "${output_file}_1_halfmapping.2.fq");
+  _find_mates("${output_file}_2_halfmapping.2.fq",
+              "${output_file}_unaligned_1.fq",
+              "${output_file}_2_halfmapping.1.fq");
+
+  # Concatenate the results
+  system( "cat ${output_file}_1_halfmapping.1.fq " .
+          "${output_file}_2_halfmapping.1.fq > " .
+          "${output_file}_halfmapping.1.fq_unsorted.tmp" );
+  unlink "${output_file}_1_halfmapping.1.fq"
+          or die "Can't delete ${output_file}_1_halfmapping.1.fq: $!";
+  system( "cat ${output_file}_1_halfmapping.2.fq " .
+          "${output_file}_2_halfmapping.2.fq > " .
+          "${output_file}_halfmapping.2.fq_unsorted.tmp" );
+  unlink "${output_file}_2_halfmapping.2.fq"
+          or die "Can't delete ${output_file}_2_halfmapping.2.fq: $!";
+
+  # Sort our mates by ID and save the sorted output files
+  _sort_fastq_by_id( "${output_file}_halfmapping.1.fq_unsorted.tmp",
+                     "${output_file}_halfmapping.1.fq" );
+  unlink "${output_file}_halfmapping.1.fq_unsorted.tmp"
+          or die "Can't delete ${output_file}_halfmapping.1.fq_unsorted.tmp: $!";
+  _sort_fastq_by_id( "${output_file}_halfmapping.2.fq_unsorted.tmp",
+                     "${output_file}_halfmapping.2.fq" );
+  unlink "${output_file}_halfmapping.2.fq_unsorted.tmp"
+          or die "Can't delete ${output_file}_halfmapping.2.fq_unsorted.tmp: $!";
+  print "Half-mapping read pairs are saved:\n";
+  print "Created ${output_file}_halfmapping.1.fq\n";
+  print "Created ${output_file}_halfmapping.2.fq\n";
+
 }
 
 =head2 bowtie_identify
@@ -1042,6 +1176,132 @@ sub _datestamp {
     $year + 1900,
     $mon + 1, $mday, $hour, $min, $sec
   );
+}
+
+# _find_mates: Identify corresponding (paired) mates for the given file of mates
+# Arguments: 1. Unmatched mates file 2. File with candidate mates to search 3. Output file
+# Note: Matches in output file are unsorted, so may be listed in a different order.
+sub _find_mates {
+  my $unpaired_mates = shift;
+  my $candidate_mates = shift;
+  my $output_file = shift;
+
+  # Open the unpaired mates file
+  my $ifh = new IO::File($unpaired_mates, 'r') or die "$0: Can't open $unpaired_mates: $!";
+
+  # Loop through the unpaired mates file and get all the search IDs
+  my $line_count = 0;
+  my $line = 0;
+  my $combined_search = "";
+  while ( my $unpaired_line = $ifh->getline ) {
+    my $id;
+    $line++;
+    if ( $line_count == 0 ) {
+      $id = substr( $unpaired_line, 1 );
+      chomp( $id );
+      $id =~ s/\/[12]$//;
+
+      # Append this ID to the combined search string
+      if ( $combined_search ne "" ) {
+        $combined_search = $combined_search . "|$id";
+      } else {
+        $combined_search = $id;
+      }
+    }
+    $line_count = ($line_count + 1) % 4;
+  }
+  $ifh->close;
+
+  # Open the file containing all potential mates
+  my $ifhb = new IO::File($candidate_mates, 'r') or die "$0: Can't open $candidate_mates: $!";
+
+  # Open the output file for writing
+  my $ofh = IO::File->new($output_file, "w") or die "$0: Can't create $output_file: $!";
+
+  # Find and save the entries for all IDs in the combined search string
+  $line_count = 0;
+  my $save_flag = 0;
+  while ( my $candidate_line = $ifhb->getline ) {
+    if ( $line_count == 0 ) {
+      # Find the pairing mate for that ID in the candidate mates file
+      $save_flag = 0;
+      if ( $candidate_line =~ m/$combined_search/ && $combined_search ne "") {
+
+        # Set the flag to print all lines for this mate to the output file
+        $save_flag = 1;
+
+        # Get the ID that matched
+        my $id;
+        $id = substr( $candidate_line, 1 );
+        chomp( $id );
+        $id =~ s/\/[12]$//;
+
+        # Remove the ID that matched from the combined search string
+        $combined_search =~ s/\|\Q$id\E\|/\|/g; # Match in middle of line
+        $combined_search =~ s/^\Q$id\E\|//g; # Match at beginning of line
+        $combined_search =~ s/\|\Q$id\E$//g; # Match at end of line
+        $combined_search =~ s/^\Q$id\E$//; # Match whole line
+      }
+    }
+    $line_count = ($line_count + 1) % 4;
+
+    # Write this line to the output file if it's a match
+    if ( $save_flag == 1 ) {
+      print $ofh $candidate_line;
+    }
+  }
+  $ifhb->close;
+  $ofh->close;
+
+  # Make sure we found all the mates we were looking for
+  if ( $combined_search ne "") {
+    die "$0: mates not found in $candidate_mates: $combined_search\n";
+  }
+}
+
+# Sorts the entries in a FastQ file by their identifiers using Unix sort
+sub _sort_fastq_by_id {
+  my $input_file = shift;
+  my $output_file = shift;
+  my $linearized_file = $input_file . "_linearized.tmp";
+  my $linearized_sorted_file = $linearized_file . "_sorted.tmp";
+  my $ifh = new IO::File($input_file, 'r') or die "$0: Can't open $input_file: $!";
+  my $lfh = IO::File->new($linearized_file, "w") or die "$0: Can't create $linearized_file: $!";
+
+  # Linearize the file by merging multiple lines into one
+  my $line_count = 0;
+  while ( my $line = $ifh->getline ) {
+    chomp($line);
+    print $lfh $line;
+    $line_count = ($line_count + 1) % 4;
+    if ($line_count == 0) {
+      print $lfh "\n";
+    } else {
+      print $lfh "\t";
+    }
+  }
+  $ifh->close;
+  $lfh->close;
+
+  # Sort the file
+  system( "sort -V -t '\t' -k1,1 $linearized_file -o $linearized_sorted_file" );
+  unlink $linearized_file or die "$0: Can't delete $linearized_file: $!";
+
+  # Un-linearize the file by splitting lines into multiple lines, and save
+  $lfh = IO::File->new($linearized_sorted_file, "r") or die "$0: Can't open $linearized_sorted_file: $!";
+  my $ofh = IO::File->new($output_file, "w") or die "$0: Can't create $output_file: $!";
+  $line_count = 0;
+  while ( my $line = $lfh->getline ) {
+    chomp( $line );
+    my @fields = split( /\t/, $line );
+    print $ofh $fields[0] . "\n";
+    print $ofh $fields[1] . "\n";
+    print $ofh $fields[2] . "\n";
+    print $ofh $fields[3] . "\n";
+  }
+  $ofh->close;
+  $lfh->close;
+  unlink $linearized_sorted_file or die "$0: Can't delete $linearized_sorted_file: $!";
 }
 
 1;
