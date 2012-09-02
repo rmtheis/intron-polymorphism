@@ -188,9 +188,17 @@ if ( $skip_to eq "L" ) { print "Skipping to alignment\n";  goto ALIGNMENT; }
 # RUN THE PIPELINE #
 ####################
 
+use constant USE_BOWTIE_1 => (0);
+
 $project->mapping_setup( $index_dir, $validate_reads );
-$project->build_bowtie_index( $index_dir );
-$project->run_bowtie_mapping( $num_threads, $minins, $maxins );
+if (USE_BOWTIE_1) {
+  $project->build_bowtie1_index( $index_dir );
+  $project->bowtie1_map_and_identify( $num_threads, $minins, $maxins );
+  goto ASSEMBLY;
+} else {
+  $project->build_bowtie_index( $index_dir );
+  $project->run_bowtie_mapping( $num_threads, $minins, $maxins );
+}
 
 COLLECTION:
 $project->build_bowtie_index( $index_dir );

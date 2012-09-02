@@ -323,7 +323,7 @@ sub run_bowtie_mapping {
 
 =cut
 
-sub run_bowtie1_mapping {
+sub bowtie1_map_and_identify {
   my $self                  = shift;
   my $num_threads           = shift;
   my $minins                = shift;
@@ -337,8 +337,10 @@ sub run_bowtie1_mapping {
   my $work_dir              = $self->{"work_dir"};
   my $reads_basename        = $self->{"reads"}->{"basename"};
   my $prefix                = "$work_dir/${reads_basename}";
-  my $output_file           = "${prefix}_initial_alignments.sam";
-  $self->{"alignment_file"} = $output_file;
+  my $align_file            = "${prefix}_initial_alignments.sam";
+  $self->{"alignment_file"} = $align_file;
+  my $halfmap_file = "${prefix}_halfmapping.sam";
+  $self->{"halfmapping_file"} = $halfmap_file;
   print "Mapping using Bowtie, using $num_threads threads...\n";
   
   # Call Bowtie to run the initial mapping
@@ -347,7 +349,7 @@ sub run_bowtie1_mapping {
         "--threads $num_threads " .
         "--un ${prefix}_initial_unaligned.fq " . 
         "-m 1 -1 $reads_file_one -2 $reads_file_two " .
-        "-S $output_file 2> $work_dir/bowtie1_initial_mapping_stats.txt"
+        "-S $align_file 2> $work_dir/bowtie1_initial_mapping_stats.txt"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
 
@@ -357,58 +359,121 @@ sub run_bowtie1_mapping {
         "bowtie $index_dir/$ref_genome_basename " .
         "--threads $num_threads " .
         "-m 1 ${prefix}_initial_unaligned_1.fq " . 
-        "--al ${prefix}_1_halfmapping.1.fq " . 
+#        "--al ${prefix}_1_halfmapping.1.fq " . 
         "--sam ${prefix}_mate1.sam " .
 	"2> $work_dir/bowtie1_secondary_mapping_stats1.txt"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
-
+  unlink "${prefix}_initial_unaligned_1.fq" or die "Can't delete ${prefix}_initial_unaligned_1.fq: $!";
+  
   capture(
         "bowtie $index_dir/$ref_genome_basename " .
         "--threads $num_threads " .
         "-m 1 ${prefix}_initial_unaligned_2.fq " . 
-        "--al ${prefix}_2_halfmapping.2.fq " . 
+#        "--al ${prefix}_2_halfmapping.2.fq " . 
         "--sam ${prefix}_mate2.sam " .
 	"2> $work_dir/bowtie1_secondary_mapping_stats2.txt"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
-
-  # Gather the corresponding mates that are paired with our identified half-mapping mates
-  print "Gathering mates...\n";
-  _find_mates("${prefix}_1_halfmapping.1.fq",
-              "${prefix}_initial_unaligned_2.fq",
-              "${prefix}_1_halfmapping.2.fq");
-  _find_mates("${prefix}_2_halfmapping.2.fq",
-              "${prefix}_initial_unaligned_1.fq",
-              "${prefix}_2_halfmapping.1.fq");
-  unlink "${prefix}_initial_unaligned_1.fq" or die "Can't delete ${prefix}_initial_unaligned_2.fq: $!";
   unlink "${prefix}_initial_unaligned_2.fq" or die "Can't delete ${prefix}_initial_unaligned_2.fq: $!";
 
-  # Concatenate the results
-  system( "cat ${prefix}_1_halfmapping.1.fq " .
-          "${prefix}_2_halfmapping.1.fq > " .
-          "${prefix}_halfmapping.1.fq_unsorted.tmp" );
-  unlink "${prefix}_1_halfmapping.1.fq" or die "Can't delete ${prefix}_1_halfmapping.1.fq: $!";
-  unlink "${prefix}_2_halfmapping.1.fq" or die "Can't delete ${prefix}_2_halfmapping.1.fq: $!";
-  system( "cat ${prefix}_1_halfmapping.2.fq " .
-          "${prefix}_2_halfmapping.2.fq > " .
-          "${prefix}_halfmapping.2.fq_unsorted.tmp" );
-  unlink "${prefix}_1_halfmapping.2.fq" or die "Can't delete ${prefix}_1_halfmapping.2.fq: $!";
-  unlink "${prefix}_2_halfmapping.2.fq" or die "Can't delete ${prefix}_2_halfmapping.2.fq: $!";
+#  # Save the half-mapping pairs as Fastq read pair files (slow)
+#  
+#  # Gather the corresponding mates that are paired with our identified half-mapping mates
+#  print "Gathering mates...\n";
+#  _find_mates("${prefix}_1_halfmapping.1.fq",
+#              "${prefix}_initial_unaligned_2.fq",
+#              "${prefix}_1_halfmapping.2.fq");
+#  _find_mates("${prefix}_2_halfmapping.2.fq",
+#              "${prefix}_initial_unaligned_1.fq",
+#              "${prefix}_2_halfmapping.1.fq");
+#  unlink "${prefix}_initial_unaligned_1.fq" or die "Can't delete ${prefix}_initial_unaligned_2.fq: $!";
+#  unlink "${prefix}_initial_unaligned_2.fq" or die "Can't delete ${prefix}_initial_unaligned_2.fq: $!";
+#
+#  # Concatenate the results
+#  system( "cat ${prefix}_1_halfmapping.1.fq " .
+#          "${prefix}_2_halfmapping.1.fq > " .
+#          "${prefix}_halfmapping.1.fq_unsorted.tmp" );
+#  unlink "${prefix}_1_halfmapping.1.fq" or die "Can't delete ${prefix}_1_halfmapping.1.fq: $!";
+#  unlink "${prefix}_2_halfmapping.1.fq" or die "Can't delete ${prefix}_2_halfmapping.1.fq: $!";
+#  system( "cat ${prefix}_1_halfmapping.2.fq " .
+#          "${prefix}_2_halfmapping.2.fq > " .
+#          "${prefix}_halfmapping.2.fq_unsorted.tmp" );
+#  unlink "${prefix}_1_halfmapping.2.fq" or die "Can't delete ${prefix}_1_halfmapping.2.fq: $!";
+#  unlink "${prefix}_2_halfmapping.2.fq" or die "Can't delete ${prefix}_2_halfmapping.2.fq: $!";
+#
+#  # Sort our mates by ID and save the sorted output files
+#  _sort_fastq_by_id( "${prefix}_halfmapping.1.fq_unsorted.tmp",
+#                     "${prefix}_halfmapping.1.fq" );
+#  unlink "${prefix}_halfmapping.1.fq_unsorted.tmp"
+#          or die "Can't delete ${prefix}_halfmapping.1.fq_unsorted.tmp: $!";
+#  _sort_fastq_by_id( "${prefix}_halfmapping.2.fq_unsorted.tmp",
+#                     "${prefix}_halfmapping.2.fq" );
+#  unlink "${prefix}_halfmapping.2.fq_unsorted.tmp"
+#          or die "Can't delete ${prefix}_halfmapping.2.fq_unsorted.tmp: $!";
+#  print "Half-mapping read pairs are saved:\n";
+#  print "Created ${prefix}_halfmapping.1.fq\n";
+#  print "Created ${prefix}_halfmapping.2.fq\n";
 
-  # Sort our mates by ID and save the sorted output files
-  _sort_fastq_by_id( "${prefix}_halfmapping.1.fq_unsorted.tmp",
-                     "${prefix}_halfmapping.1.fq" );
-  unlink "${prefix}_halfmapping.1.fq_unsorted.tmp"
-          or die "Can't delete ${prefix}_halfmapping.1.fq_unsorted.tmp: $!";
-  _sort_fastq_by_id( "${prefix}_halfmapping.2.fq_unsorted.tmp",
-                     "${prefix}_halfmapping.2.fq" );
-  unlink "${prefix}_halfmapping.2.fq_unsorted.tmp"
-          or die "Can't delete ${prefix}_halfmapping.2.fq_unsorted.tmp: $!";
-  print "Half-mapping read pairs are saved:\n";
-  print "Created ${prefix}_halfmapping.1.fq\n";
-  print "Created ${prefix}_halfmapping.2.fq\n";
+  # Concatenate the SAM files for the individual mates
+  capture( "cat ${prefix}_mate1.sam ${prefix}_mate2.sam > ${prefix}_combined.sam");
+  die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
+  unlink "${prefix}_mate1.sam" or die "Can't delete ${prefix}_mate1.sam: $!";
+  unlink "${prefix}_mate2.sam" or die "Can't delete ${prefix}_mate2.sam: $!";
+  
+  # Sort by ID
+  capture("sort -V -k1,1 -o ${prefix}_combined_sorted.sam ${prefix}_combined.sam");
+  die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
+  unlink "${prefix}_combined.sam" or die "Can't delete ${prefix}_combined.sam: $!";
+  
+  # Get the alignment flags, and remove the cases where both mates fail to align
+  # We have unpaired alignments, so possible flag values are:
+  # 0 or 16 for alignment to the forward or reverse strand respectively
+  # 4 for no reported alignments
+  my $infile = "${prefix}_combined_sorted.sam";
+  my $ifh = IO::File->new( $infile, 'r' ) or die "Can't open $infile: $!";
+  my $ofh = IO::File->new( $halfmap_file, 'w' ) or die "Can't open halfmap_file: $!";
+  while ( my $line1 = $ifh->getline ) {
+    next if $line1 =~ m/^@/;
 
+    # Read in both mates in the pair
+    my @a = split( /\t/, $line1 );
+    my ($mate1_id, $flags1) = ($a[0], $a[1]);
+    my $line2 = $ifh->getline;
+    my @b = split( /\t/, $line2 );
+    my ($mate2_id, $flags2) = ($b[0], $b[1]);
+    die "Error: Mates do not match. Lines: $line1 $line2" if ($mate1_id ne $mate2_id);
+    
+    # Look for half-mapping alignments where one of the two mates has no
+    # reported alignments (flags value = 4 for one mate but not for both mates)
+    if ( ($flags1 == 4) ^ ($flags2 == 4) ) {
+      # Record the unaligned mate along with the position where its paired mate aligned
+      if ($flags1 == 4) {
+        # Mate 1 is unaligned, so record mate 1 with the alignment position of mate 2, as in Bowtie 2 SAM output:
+        # For field 2, use 69 if other mate aligns to forward strand, use 101 otherwise
+        # For field 7, record the name of reference seq where mate's alignment occurs
+        # For field 8, record the offset into the fwd ref strand where mate alignment occurs
+        my $newflags;
+        if ($flags2 == 16) {
+          $a[1] = 101;
+        } else {
+          $a[1] = 69;
+        }
+        print $ofh "$a[0]\t$a[1]\t$a[2]\t$a[3]\t$a[4]\t$a[5]\t$b[2]\t$b[3]\t$a[8]\t$a[9]\t$a[10]\t$a[11]";
+      } else {
+        if ($flags1 == 16) {
+          $b[1] = 101;
+        } else {
+          $b[1] = 69;
+        }
+        # Mate 2 is unaligned, so record mate 2 with the alignment position of mate 1
+        print $ofh "$b[0]\t$b[1]\t$b[2]\t$b[3]\t$b[4]\t$b[5]\t$a[2]\t$a[3]\t$b[8]\t$b[9]\t$b[10]\t$b[11]";
+      }
+    } 
+  }
+  $ifh->close;
+  $ofh->close;
+  unlink $infile or die "Can't delete $infile: $!";
 }
 
 =head2 bowtie_identify
@@ -812,7 +877,7 @@ sub assemble_groups {
   my $assembly_dir        = $self->{"assembly_dir"};
   my $results_file        = "$work_dir/${reads_basename}_contigs.fa";
   $self->{"contigs_file"} = $results_file;
-  my $contigs_file_suffix = "_k${min_contig_length}_t1_o1.contigs";
+  my $contigs_file_suffix = "_k16_t1_o1.contigs";
   
   return if (-z $halfmap_file || !(-e $halfmap_file));
   print "Performing local assemblies...\n";
