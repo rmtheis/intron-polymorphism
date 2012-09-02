@@ -216,9 +216,9 @@ $project->set_fragment_length( $fragment_length, $existing_alignment_file );
 $project->assemble_groups( $intron_length, $min_mates, $min_contig_length, $existing_halfmapping_file );
 
 ALIGNMENT:
-#$project->build_blast_index( $index_dir );
-#$project->align_groups_blast( $existing_contigs_file );
-$project->align_groups_clustal( $existing_contigs_file, $output_file );
+$project->build_blast_index( $index_dir );
+$project->align_groups_blast( $existing_contigs_file );
+#$project->align_groups_clustal( $existing_contigs_file, $output_file );
 
 # Copy latest run to "run-latest" directory for quickly locating the last-run results
 #system( "rm -rf run-latest/*" );
