@@ -459,7 +459,7 @@ sub bowtie1_map_and_identify {
         } else {
           $a[1] = 69;
         }
-        print $ofh "$a[0]\t$a[1]\t$a[2]\t$a[3]\t$a[4]\t$a[5]\t$b[2]\t$b[3]\t$a[8]\t$a[9]\t$a[10]\t$a[11]";
+        print $ofh "$a[0]\t$a[1]\t$b[2]\t$b[3]\t$a[4]\t$a[5]\t$b[2]\t$b[3]\t$a[8]\t$a[9]\t$a[10]\t$a[11]";
       } else {
         if ($flags1 == 16) {
           $b[1] = 101;
@@ -467,7 +467,7 @@ sub bowtie1_map_and_identify {
           $b[1] = 69;
         }
         # Mate 2 is unaligned, so record mate 2 with the alignment position of mate 1
-        print $ofh "$b[0]\t$b[1]\t$b[2]\t$b[3]\t$b[4]\t$b[5]\t$a[2]\t$a[3]\t$b[8]\t$b[9]\t$b[10]\t$b[11]";
+        print $ofh "$b[0]\t$b[1]\t$a[2]\t$a[3]\t$b[4]\t$b[5]\t$a[2]\t$a[3]\t$b[8]\t$b[9]\t$b[10]\t$b[11]";
       }
     } 
   }
@@ -719,7 +719,7 @@ sub create_simulated_pairs {
 
  Title   : align_simulated_pairs
  Usage   : $project->align_simulated_pairs( $num_threads )
- Function: Aligns simulated read pairs to the reference genome.
+ Function: Aligns simulated read pairs to the reference genome using Bowtie 2.
  Example : $project->bowtie_identify();
            $project->align_simulated_pairs( 8 );
  Returns : No return value
@@ -751,6 +751,49 @@ sub align_simulated_pairs {
       . "-S $outfile 2> $work_dir/bowtie2_sim_pairs_stats.txt"
   );
   die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+}
+
+=head2 align_simulated_pairs_bowtie1
+
+ Title   : align_simulated_pairs_bowtie1
+ Usage   : $project->align_simulated_pairs_bowtie1( $num_threads )
+ Function: Aligns simulated read pairs to the reference genome using Bowtie 1.
+ Example : $project->bowtie_identify();
+           $project->align_simulated_pairs_bowtie1( 8 );
+ Returns : No return value
+ Args    : Number of parallel search threads to use for Bowtie
+
+=cut
+
+sub align_simulated_pairs_bowtie1 {
+  my $self                = shift;
+  my $num_threads         = shift;
+  my $pairs_file_1        = shift || $self->{"sim_pairs_file_1"};
+  my $pairs_file_2        = shift || $self->{"sim_pairs_file_2"};
+  my $work_dir            = $self->{"work_dir"};
+  my $reads_basename      = $self->{"reads"}->{"basename"};
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $index_dir           = $self->{"index_dir"};
+  my $outfile             = "$work_dir/${reads_basename}_sim_pairs_alignment.sam";
+  my $sorted_outfile      = "$work_dir/${reads_basename}_sim_pairs_alignment_sorted.sam"; 
+  $self->{"realignment_file"} = $sorted_outfile;
+  
+  return if (-z $pairs_file_1 || !(-e $pairs_file_1));
+  print "Aligning simulated paired-end reads...\n";
+  
+  # Run Bowtie with the simulated read pairs as input
+  capture(
+        "bowtie $index_dir/$ref_genome_basename "
+      . "--threads $num_threads "
+      . "-m 1 -1 $pairs_file_1 -2 $pairs_file_2 "
+      . "-S $outfile 2> $work_dir/bowtie2_sim_pairs_stats.txt"
+  );
+  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+  
+  # Sort alignment file by ID
+  capture( "sort -V -k1,1 -o $sorted_outfile $outfile" );
+  die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
+  unlink $outfile or die "$0: Can't delete $outfile: $!";
 }
 
 =head2 filter1

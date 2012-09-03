@@ -194,7 +194,7 @@ $project->mapping_setup( $index_dir, $validate_reads );
 if (USE_BOWTIE_1) {
   $project->build_bowtie1_index( $index_dir );
   $project->bowtie1_map_and_identify( $num_threads, $minins, $maxins );
-  goto ASSEMBLY;
+  goto FILTERING;
 } else {
   $project->build_bowtie_index( $index_dir );
   $project->run_bowtie_mapping( $num_threads, $minins, $maxins );
@@ -208,7 +208,11 @@ FILTERING:
 $project->build_bowtie_index( $index_dir );
 $project->set_fragment_length( $fragment_length, $existing_alignment_file );
 $project->create_simulated_pairs( $existing_alignment_file, $existing_halfmapping_file );
-$project->align_simulated_pairs( $num_threads );
+if (USE_BOWTIE_1) {
+  $project->align_simulated_pairs_bowtie1( $num_threads );
+} else {
+  $project->align_simulated_pairs( $num_threads );
+}
 $project->filter1( $existing_halfmapping_file );
 
 ASSEMBLY:
