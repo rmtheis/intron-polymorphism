@@ -293,7 +293,7 @@ sub run_bowtie_mapping {
   my $reads_basename        = $self->{"reads"}->{"basename"};
   my $output_file           = "$work_dir/${reads_basename}_initial_alignments.sam";
   $self->{"alignment_file"} = $output_file;
-  print "Mapping using Bowtie, using $num_threads threads...\n";
+  print "Mapping using Bowtie 2, using $num_threads threads...\n";
   
   # Call Bowtie to run the mapping
   capture(
@@ -341,7 +341,7 @@ sub bowtie1_map_and_identify {
   $self->{"alignment_file"} = $align_file;
   my $halfmap_file = "${prefix}_halfmapping.sam";
   $self->{"halfmapping_file"} = $halfmap_file;
-  print "Mapping using Bowtie, using $num_threads threads...\n";
+  print "Mapping using Bowtie 1, using $num_threads threads...\n";
   
   # Call Bowtie to run the initial mapping
   capture(
@@ -877,7 +877,7 @@ sub assemble_groups {
   my $assembly_dir        = $self->{"assembly_dir"};
   my $results_file        = "$work_dir/${reads_basename}_contigs.fa";
   $self->{"contigs_file"} = $results_file;
-  my $contigs_file_suffix = "_k16_t1_o1.contigs";
+  my $contigs_file_suffix = "_k16_t8_o1.contigs";
   
   return if (-z $halfmap_file || !(-e $halfmap_file));
   print "Performing local assemblies...\n";
@@ -952,7 +952,7 @@ sub assemble_groups {
       $ofh->close;
       $ofh2->close;
 
-      capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 1"
+      capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 8"
            . " >> $work_dir/taipan_output.txt 2>&1" );
       die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
@@ -1000,7 +1000,7 @@ sub assemble_groups {
     $ofh->close;
     $ofh2->close;
 
-    capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 1"
+    capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 8"
            . " >> $work_dir/taipan_output.txt 2>&1" );
     die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
