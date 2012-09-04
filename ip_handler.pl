@@ -44,6 +44,7 @@ my $usage_msg = "Usage:\n"
   . "    -w/--existing-align-file      <string>\n"
   . "    -e/--existing-halfmap-file    <string>\n"
   . "    -c/--existing-contigs-file    <string>\n"
+  . "    --bowtie1\n"
   . "    --validate-reads\n"
   . "    --version\n";
 
@@ -68,6 +69,7 @@ my $index_dir = undef;                  # Directory containing index files for B
 my $existing_alignment_file = undef;    # Path to existing SAM alignment data. Leave as undef for new run
 my $existing_halfmapping_file = undef;  # Path to existing SAM halfmapping mate data. Leave as undef for new run
 my $existing_contigs_file = undef;      # Path to existing multi-Fasta contigs data. Leave as undef for new run
+my $bowtie1 = undef;                    # Flag to use Bowtie 1 instead of Bowtie 2
 my $validate_reads;                     # Flag indicating whether to validate Fastq reads file
 my $version;                            # Flag to print version number and exit
 my $help;                               # Flag to print usage message and exit
@@ -95,6 +97,7 @@ GetOptions(
   "w|existing-align-file:s" => \$existing_alignment_file,
   "e|existing-halfmap-file:s" => \$existing_halfmapping_file,
   "c|existing-contigs-file:s" => \$existing_contigs_file,
+  "bowtie1" => \$bowtie1,
   "validate-reads" => \$validate_reads,
   "v|version" => \$version,
   "h|help" => \$help,
@@ -114,6 +117,7 @@ $minins = $minins || 0;
 $maxins = $maxins || 3000;
 $num_threads = $num_threads || Sys::CPU::cpu_count();
 $skip_to = $skip_to || "";
+$bowtie1 = $bowtie1 || 0;
 $index_dir = $index_dir || $ENV{HOME} . "/intron-polymorphism/index";
 $existing_alignment_file = $existing_alignment_file || "";
 $existing_halfmapping_file = $existing_halfmapping_file || "";
@@ -170,6 +174,15 @@ $project->build_db(
   $mate2s
 );
 
+# Set the Bowtie version to use
+my $bowtie_version;
+if ($bowtie1) {
+  $bowtie_version = 1;
+} else {
+  $bowtie_version = 2; # Default is Bowtie 2.
+}
+$project->set_bowtie_version( $bowtie_version );
+
 # Ensure required executables are available
 die "bowtie2 not available on PATH" if system("bowtie2 --version >/dev/null 2>/dev/null") != 0;
 die "taipan not available on PATH" if system("which taipan >/dev/null 2>/dev/null") != 0;
@@ -191,14 +204,8 @@ if ( $skip_to eq "L" ) { print "Skipping to alignment\n";  goto ALIGNMENT; }
 use constant USE_BOWTIE_1 => (0);
 
 $project->mapping_setup( $index_dir, $validate_reads );
-if (USE_BOWTIE_1) {
-  $project->build_bowtie1_index( $index_dir );
-  $project->bowtie1_map_and_identify( $num_threads, $minins, $maxins );
-  goto FILTERING;
-} else {
-  $project->build_bowtie_index( $index_dir );
-  $project->run_bowtie_mapping( $num_threads, $minins, $maxins );
-}
+$project->build_bowtie_index( $index_dir );
+$project->run_bowtie_mapping( $num_threads, $minins, $maxins );
 
 COLLECTION:
 $project->build_bowtie_index( $index_dir );
@@ -208,11 +215,7 @@ FILTERING:
 $project->build_bowtie_index( $index_dir );
 $project->set_fragment_length( $fragment_length, $existing_alignment_file );
 $project->create_simulated_pairs( $existing_alignment_file, $existing_halfmapping_file );
-if (USE_BOWTIE_1) {
-  $project->align_simulated_pairs_bowtie1( $num_threads );
-} else {
-  $project->align_simulated_pairs( $num_threads );
-}
+$project->align_simulated_pairs( $num_threads );
 $project->filter1( $existing_halfmapping_file );
 
 ASSEMBLY:

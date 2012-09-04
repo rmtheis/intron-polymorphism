@@ -134,6 +134,23 @@ sub build_db {
   }
 }
 
+=head2 set_bowtie_version
+
+ Title   : set_bowtie_version
+ Usage   : $project->set_bowtie_version( $ver )
+ Function: Sets major version number of Bowtie to use: Bowtie 2 or Bowtie 1.
+ Example : $project->set_bowtie_version( 2 );
+ Returns : No return value
+ Args    : Use 1 for Bowtie 1. Use 2 for Bowtie 2.
+
+=cut
+
+sub set_bowtie_version {
+  my $self     = shift;
+  my $version  = shift;
+  $self->{"bowtie_version"} = $version;
+}
+
 =head2 mapping_setup
 
  Title   : mapping_setup
@@ -204,7 +221,7 @@ sub mapping_setup {
 
  Title   : build_bowtie_index
  Usage   : $project->build_bowtie_index();
- Function: Runs the bowtie2-build indexer to create a Bowtie index from the reference genome
+ Function: Runs the Bowtie indexer to create a Bowtie index from the reference genome
  Example : $project->mapping_setup( $index_dir, $reads_dir, "reads" );
            $project->build_bowtie_index();
  Returns : No return value
@@ -217,50 +234,37 @@ sub build_bowtie_index {
   my $index_dir           = shift || $self->{"index_dir"};
   my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $bowtie_version      = $self->{"bowtie_version"};
   $self->{"index_dir"}    = $index_dir;
-  unless ( -e "$index_dir/$ref_genome_basename.1.bt2"
-    && "$index_dir/$ref_genome_basename.2.bt2"
-    && "$index_dir/$ref_genome_basename.3.bt2"
-    && "$index_dir/$ref_genome_basename.4.bt2"
-    && "$index_dir/$ref_genome_basename.rev.1.bt2"
-    && "$index_dir/$ref_genome_basename.rev.2.bt2" )
-  {
-    # Create the Bowtie index
-    print "Creating bowtie index in $index_dir...\n";
-    capture( "bowtie2-build $ref_genome $index_dir/$ref_genome_basename" );
-    die "$0: bowtie2-build exited unsuccessful" if ( $EXITVAL != 0 );
-  }
-}
-
-=head2 build_bowtie1_index
-
- Title   : build_bowtie1_index
- Usage   : $project->build_bowtie1_index();
- Function: Runs the bowtie-build indexer to create a Bowtie v1 index from the reference genome
- Example : $project->mapping_setup( $index_dir, $reads_dir, "reads" );
-           $project->build_bowtie1_index();
- Returns : No return value
- Args    : Directory containing Bowtie index files (optional)
-
-=cut
-
-sub build_bowtie1_index { 
-  my $self                = shift;
-  my $index_dir           = shift || $self->{"index_dir"};
-  my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
-  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  $self->{"index_dir"}    = $index_dir;
-  unless ( -e "$index_dir/$ref_genome_basename.1.ebwt"
-    && "$index_dir/$ref_genome_basename.2.ebwt"
-    && "$index_dir/$ref_genome_basename.3.ebwt"
-    && "$index_dir/$ref_genome_basename.4.ebwt"
-    && "$index_dir/$ref_genome_basename.rev.1.ebwt"
-    && "$index_dir/$ref_genome_basename.rev.2.ebwt" )
-  {
-    # Create the Bowtie index
-    print "Creating bowtie index in $index_dir...\n";
-    capture( "bowtie-build $ref_genome $index_dir/$ref_genome_basename" );
-    die "$0: bowtie-build exited unsuccessful" if ( $EXITVAL != 0 );
+  
+  if ($bowtie_version == 2) {
+    # Bowtie 2
+    unless ( -e "$index_dir/$ref_genome_basename.1.bt2"
+      && "$index_dir/$ref_genome_basename.2.bt2"
+      && "$index_dir/$ref_genome_basename.3.bt2"
+      && "$index_dir/$ref_genome_basename.4.bt2"
+      && "$index_dir/$ref_genome_basename.rev.1.bt2"
+      && "$index_dir/$ref_genome_basename.rev.2.bt2" )
+    {
+      # Create the Bowtie index
+      print "Creating bowtie index in $index_dir...\n";
+      capture( "bowtie2-build $ref_genome $index_dir/$ref_genome_basename" );
+      die "$0: bowtie2-build exited unsuccessful" if ( $EXITVAL != 0 );
+    }
+  } else {
+    # Bowtie 1
+    unless ( -e "$index_dir/$ref_genome_basename.1.ebwt"
+      && "$index_dir/$ref_genome_basename.2.ebwt"
+      && "$index_dir/$ref_genome_basename.3.ebwt"
+      && "$index_dir/$ref_genome_basename.4.ebwt"
+      && "$index_dir/$ref_genome_basename.rev.1.ebwt"
+      && "$index_dir/$ref_genome_basename.rev.2.ebwt" )
+    {
+      # Create the Bowtie index
+      print "Creating bowtie index in $index_dir...\n";
+      capture( "bowtie-build $ref_genome $index_dir/$ref_genome_basename" );
+      die "$0: bowtie-build exited unsuccessful" if ( $EXITVAL != 0 );
+    }
   }
 }
 
@@ -283,51 +287,7 @@ sub run_bowtie_mapping {
   my $num_threads           = shift;
   my $minins                = shift;
   my $maxins                = shift;
-  my $mate1s                = $self->{"reads"}->{"mate1s"};
-  my $mate2s                = $self->{"reads"}->{"mate2s"};
-  my $ref_genome_basename   = $self->{"ref_genome"}->{"basename"};
-  my $index_dir             = $self->{"index_dir"};
-  my $reads_file_one        = $self->{"bowtie_db"}->{"reads_file_one"};
-  my $reads_file_two        = $self->{"bowtie_db"}->{"reads_file_two"};
-  my $work_dir              = $self->{"work_dir"};
-  my $reads_basename        = $self->{"reads"}->{"basename"};
-  my $output_file           = "$work_dir/${reads_basename}_initial_alignments.sam";
-  $self->{"alignment_file"} = $output_file;
-  print "Mapping using Bowtie 2, using $num_threads threads...\n";
-  
-  # Call Bowtie to run the mapping
-  capture(
-        "bowtie2 -x $index_dir/$ref_genome_basename "
-      . "--threads $num_threads --reorder --no-hd "
-      . "--maxins $maxins --minins $minins "
-      . "--no-discordant "
-      . "--no-contain --no-overlap "
-      . "-k 3 -1 $reads_file_one -2 $reads_file_two "
-      . "-S $output_file 2> $work_dir/bowtie2_initial_mapping_stats.txt"
-  );
-  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
-  print "Saved alignment data to $output_file\n";
-}
-
-=head2 run_bowtie1_mapping
-
- Title   : run_bowtie1_mapping
- Usage   : $project->run_bowtie1_mapping( num_threads, minins, maxins )
- Function: Aligns reads to the reference genome and saves output file using Bowtie v1
- Example : $project->mapping_setup( $index_dir, $reads_dir, "reads" );
-           $project->build_bowtie1_index();
-           $project->run_bowtie1_mapping( 8, 100, 500 );
- Returns : No return value
- Args    : Number of parallel search threads to use for Bowtie, numeric length to use for
-           Bowtie -I/--minins parameter, numeric length to use for Bowtie -X/--maxins parameter
-
-=cut
-
-sub bowtie1_map_and_identify {
-  my $self                  = shift;
-  my $num_threads           = shift;
-  my $minins                = shift;
-  my $maxins                = shift;
+  my $bowtie_version        = $self->{"bowtie_version"};
   my $mate1s                = $self->{"reads"}->{"mate1s"};
   my $mate2s                = $self->{"reads"}->{"mate2s"};
   my $ref_genome_basename   = $self->{"ref_genome"}->{"basename"};
@@ -337,143 +297,73 @@ sub bowtie1_map_and_identify {
   my $work_dir              = $self->{"work_dir"};
   my $reads_basename        = $self->{"reads"}->{"basename"};
   my $prefix                = "$work_dir/${reads_basename}";
-  my $align_file            = "${prefix}_initial_alignments.sam";
-  $self->{"alignment_file"} = $align_file;
-  my $halfmap_file = "${prefix}_halfmapping.sam";
-  $self->{"halfmapping_file"} = $halfmap_file;
-  print "Mapping using Bowtie 1, using $num_threads threads...\n";
+  my $output_file           = "${prefix}_initial_alignments.sam";
+  $self->{"alignment_file"} = $output_file;
   
-  # Call Bowtie to run the initial mapping
-  capture(
-        "bowtie $index_dir/$ref_genome_basename " .
-        "--threads $num_threads " .
-        "--un ${prefix}_initial_unaligned.fq " . 
-        "-m 1 -1 $reads_file_one -2 $reads_file_two " .
-        "-S $align_file 2> $work_dir/bowtie1_initial_mapping_stats.txt"
-  );
-  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
-
-  # Identify the half-mapping read pairs. Read pairs are already those that align uniquely to the
-  # reference sequence because Bowtie 1 was run with option '-m 1'.
-  capture(
-        "bowtie $index_dir/$ref_genome_basename " .
-        "--threads $num_threads " .
-        "-m 1 ${prefix}_initial_unaligned_1.fq " . 
-#        "--al ${prefix}_1_halfmapping.1.fq " . 
-        "--sam ${prefix}_mate1.sam " .
-	"2> $work_dir/bowtie1_secondary_mapping_stats1.txt"
-  );
-  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
-  unlink "${prefix}_initial_unaligned_1.fq" or die "Can't delete ${prefix}_initial_unaligned_1.fq: $!";
-  
-  capture(
-        "bowtie $index_dir/$ref_genome_basename " .
-        "--threads $num_threads " .
-        "-m 1 ${prefix}_initial_unaligned_2.fq " . 
-#        "--al ${prefix}_2_halfmapping.2.fq " . 
-        "--sam ${prefix}_mate2.sam " .
-	"2> $work_dir/bowtie1_secondary_mapping_stats2.txt"
-  );
-  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
-  unlink "${prefix}_initial_unaligned_2.fq" or die "Can't delete ${prefix}_initial_unaligned_2.fq: $!";
-
-#  # Save the half-mapping pairs as Fastq read pair files (slow)
-#  
-#  # Gather the corresponding mates that are paired with our identified half-mapping mates
-#  print "Gathering mates...\n";
-#  _find_mates("${prefix}_1_halfmapping.1.fq",
-#              "${prefix}_initial_unaligned_2.fq",
-#              "${prefix}_1_halfmapping.2.fq");
-#  _find_mates("${prefix}_2_halfmapping.2.fq",
-#              "${prefix}_initial_unaligned_1.fq",
-#              "${prefix}_2_halfmapping.1.fq");
-#  unlink "${prefix}_initial_unaligned_1.fq" or die "Can't delete ${prefix}_initial_unaligned_2.fq: $!";
-#  unlink "${prefix}_initial_unaligned_2.fq" or die "Can't delete ${prefix}_initial_unaligned_2.fq: $!";
-#
-#  # Concatenate the results
-#  system( "cat ${prefix}_1_halfmapping.1.fq " .
-#          "${prefix}_2_halfmapping.1.fq > " .
-#          "${prefix}_halfmapping.1.fq_unsorted.tmp" );
-#  unlink "${prefix}_1_halfmapping.1.fq" or die "Can't delete ${prefix}_1_halfmapping.1.fq: $!";
-#  unlink "${prefix}_2_halfmapping.1.fq" or die "Can't delete ${prefix}_2_halfmapping.1.fq: $!";
-#  system( "cat ${prefix}_1_halfmapping.2.fq " .
-#          "${prefix}_2_halfmapping.2.fq > " .
-#          "${prefix}_halfmapping.2.fq_unsorted.tmp" );
-#  unlink "${prefix}_1_halfmapping.2.fq" or die "Can't delete ${prefix}_1_halfmapping.2.fq: $!";
-#  unlink "${prefix}_2_halfmapping.2.fq" or die "Can't delete ${prefix}_2_halfmapping.2.fq: $!";
-#
-#  # Sort our mates by ID and save the sorted output files
-#  _sort_fastq_by_id( "${prefix}_halfmapping.1.fq_unsorted.tmp",
-#                     "${prefix}_halfmapping.1.fq" );
-#  unlink "${prefix}_halfmapping.1.fq_unsorted.tmp"
-#          or die "Can't delete ${prefix}_halfmapping.1.fq_unsorted.tmp: $!";
-#  _sort_fastq_by_id( "${prefix}_halfmapping.2.fq_unsorted.tmp",
-#                     "${prefix}_halfmapping.2.fq" );
-#  unlink "${prefix}_halfmapping.2.fq_unsorted.tmp"
-#          or die "Can't delete ${prefix}_halfmapping.2.fq_unsorted.tmp: $!";
-#  print "Half-mapping read pairs are saved:\n";
-#  print "Created ${prefix}_halfmapping.1.fq\n";
-#  print "Created ${prefix}_halfmapping.2.fq\n";
-
-  # Concatenate the SAM files for the individual mates
-  capture( "cat ${prefix}_mate1.sam ${prefix}_mate2.sam > ${prefix}_combined.sam");
-  die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
-  unlink "${prefix}_mate1.sam" or die "Can't delete ${prefix}_mate1.sam: $!";
-  unlink "${prefix}_mate2.sam" or die "Can't delete ${prefix}_mate2.sam: $!";
-  
-  # Sort by ID
-  capture("sort -V -k1,1 -o ${prefix}_combined_sorted.sam ${prefix}_combined.sam");
-  die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
-  unlink "${prefix}_combined.sam" or die "Can't delete ${prefix}_combined.sam: $!";
-  
-  # Get the alignment flags, and remove the cases where both mates fail to align
-  # We have unpaired alignments, so possible flag values are:
-  # 0 or 16 for alignment to the forward or reverse strand respectively
-  # 4 for no reported alignments
-  my $infile = "${prefix}_combined_sorted.sam";
-  my $ifh = IO::File->new( $infile, 'r' ) or die "Can't open $infile: $!";
-  my $ofh = IO::File->new( $halfmap_file, 'w' ) or die "Can't open halfmap_file: $!";
-  while ( my $line1 = $ifh->getline ) {
-    next if $line1 =~ m/^@/;
-
-    # Read in both mates in the pair
-    my @a = split( /\t/, $line1 );
-    my ($mate1_id, $flags1) = ($a[0], $a[1]);
-    my $line2 = $ifh->getline;
-    my @b = split( /\t/, $line2 );
-    my ($mate2_id, $flags2) = ($b[0], $b[1]);
-    die "Error: Mates do not match. Lines: $line1 $line2" if ($mate1_id ne $mate2_id);
+  if ($bowtie_version == 2) {
     
-    # Look for half-mapping alignments where one of the two mates has no
-    # reported alignments (flags value = 4 for one mate but not for both mates)
-    if ( ($flags1 == 4) ^ ($flags2 == 4) ) {
-      # Record the unaligned mate along with the position where its paired mate aligned
-      if ($flags1 == 4) {
-        # Mate 1 is unaligned, so record mate 1 with the alignment position of mate 2, as in Bowtie 2 SAM output:
-        # For field 2, use 69 if other mate aligns to forward strand, use 101 otherwise
-        # For field 7, record the name of reference seq where mate's alignment occurs
-        # For field 8, record the offset into the fwd ref strand where mate alignment occurs
-        my $newflags;
-        if ($flags2 == 16) {
-          $a[1] = 101;
-        } else {
-          $a[1] = 69;
-        }
-        print $ofh "$a[0]\t$a[1]\t$b[2]\t$b[3]\t$a[4]\t$a[5]\t$b[2]\t$b[3]\t$a[8]\t$a[9]\t$a[10]\t$a[11]";
-      } else {
-        if ($flags1 == 16) {
-          $b[1] = 101;
-        } else {
-          $b[1] = 69;
-        }
-        # Mate 2 is unaligned, so record mate 2 with the alignment position of mate 1
-        print $ofh "$b[0]\t$b[1]\t$a[2]\t$a[3]\t$b[4]\t$b[5]\t$a[2]\t$a[3]\t$b[8]\t$b[9]\t$b[10]\t$b[11]";
-      }
-    } 
+    # Call Bowtie 2 to run the mapping
+    print "Mapping using Bowtie 2, using $num_threads threads...\n";
+    capture(
+          "bowtie2 -x $index_dir/$ref_genome_basename "
+        . "--threads $num_threads --reorder --no-hd "
+        . "--maxins $maxins --minins $minins "
+        . "--no-discordant "
+        . "--no-contain --no-overlap "
+        . "-k 3 -1 $reads_file_one -2 $reads_file_two "
+        . "-S $output_file 2> $work_dir/${reads_basename}_bowtie2_initial_mapping_stats.txt"
+    );
+    die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+    print "Saved alignment data to $output_file\n";
+    
+  } else {
+    
+    # Call Bowtie 1 to run the mapping
+    print "Mapping using Bowtie 1, using $num_threads threads...\n";
+    capture(
+          "bowtie $index_dir/$ref_genome_basename " .
+          "--threads $num_threads " .
+          "--un ${prefix}_initial_unaligned.fq " . 
+          "-m 1 -1 $reads_file_one -2 $reads_file_two " .
+          "-S $output_file 2> $work_dir/${reads_basename}_bowtie1_initial_mapping_stats.txt"
+    );
+    die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+  
+    # Identify the half-mapping read pairs by running unaligned mates individually.
+    # Read pairs are already those that align uniquely to the reference sequence because Bowtie 1 was
+    # run with option '-m 1'.
+    capture(
+          "bowtie $index_dir/$ref_genome_basename " .
+          "--threads $num_threads " .
+          "-m 1 ${prefix}_initial_unaligned_1.fq " . 
+          "--sam ${prefix}_mate1.sam " .
+          "2> $work_dir/${reads_basename}_bowtie1_secondary_mapping_stats1.txt"
+    );
+    die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+    unlink "${prefix}_initial_unaligned_1.fq" or die "Can't delete ${prefix}_initial_unaligned_1.fq: $!";
+    
+    capture(
+          "bowtie $index_dir/$ref_genome_basename " .
+          "--threads $num_threads " .
+          "-m 1 ${prefix}_initial_unaligned_2.fq " . 
+          "--sam ${prefix}_mate2.sam " .
+          "2> $work_dir/${reads_basename}_bowtie1_secondary_mapping_stats2.txt"
+    );
+    die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+    unlink "${prefix}_initial_unaligned_2.fq" or die "Can't delete ${prefix}_initial_unaligned_2.fq: $!";
+    
+    # Concatenate the SAM files for the individual mates
+    capture( "cat ${prefix}_mate1.sam ${prefix}_mate2.sam > ${prefix}_combined.sam");
+    die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
+    unlink "${prefix}_mate1.sam" or die "Can't delete ${prefix}_mate1.sam: $!";
+    unlink "${prefix}_mate2.sam" or die "Can't delete ${prefix}_mate2.sam: $!";
+    
+    # Sort by ID
+    capture("sort -V -k1,1 -o ${prefix}_combined_sorted.sam ${prefix}_combined.sam");
+    die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
+    unlink "${prefix}_combined.sam" or die "Can't delete ${prefix}_combined.sam: $!";
+    
   }
-  $ifh->close;
-  $ofh->close;
-  unlink $infile or die "Can't delete $infile: $!";
 }
 
 =head2 bowtie_identify
@@ -492,13 +382,16 @@ sub bowtie1_map_and_identify {
 sub bowtie_identify {
   my $self                    = shift;
   my $alignment_file          = shift || $self->{"alignment_file"};
+  my $bowtie_version          = $self->{"bowtie_version"};
   my $reads_basename          = $self->{"reads"}->{"basename"};
   my $scripts_dir             = $self->{"scripts_dir"};
   my $work_dir                = $self->{"work_dir"};
+  my $bowtie1_infile          = "$work_dir/${reads_basename}_combined_sorted.sam";
   my $outfile                 = "$work_dir/${reads_basename}_halfm_pairs.sam";
   my $outfile2                = "$work_dir/${reads_basename}_halfm_unal_mates.sam";
   my $outfile3                = $outfile;
   $outfile3                   =~ s/(\.[^.]+)$/_sorted.sam/;
+  my $outfile4                = "$work_dir/${reads_basename}_halfm_unal_mates_unsorted.sam";
   $self->{"halfmapping_file"} = $outfile2;
   
   if (!-e $alignment_file) {
@@ -506,106 +399,153 @@ sub bowtie_identify {
     return;
   }
   $scripts_dir =~ s!/*$!/! if ($scripts_dir ne ""); # Add trailing slash if not already present
-
   print "Identifying half-mapping read pairs...\n";
-  
-  my $ifh  = IO::File->new( $alignment_file, 'r' ) or die "Can't open $alignment_file: $!";
-  my $ofh  = IO::File->new( $outfile, 'w' ) or die "Can't create $outfile: $!";
-  my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "Can't create $outfile2: $!";
-  my $prev_id         = "";
-  my $discard_this_id = 0;
-  my $mapping         = 0;
-  my @print_lines = ();
   my $count = 0;
-  while ( my $line = $ifh->getline ) {
-    next if $line =~ m/^@/;
-    my @fields = split( /\t/, $line );
-    my ($mate_id, $flags) = ($fields[0], $fields[1]);
-
-    # Check if this mate ID is different from the last line
-    if ( $mate_id ne $prev_id ) {
-
-      # This line is the first line with a new read ID
-      if ( scalar @print_lines == 2 && $mapping == 1 && $prev_id ne "" ) {
-
-        my $line1  = shift(@print_lines);
-        my @fd1    = split( /\t/, $line1 );
-        my $flags1 = $fd1[1];
-        my $line2  = shift(@print_lines);
-        my @fd2    = split( /\t/, $line2 );
-        my $flags2 = $fd2[1];
-
-        # Print the half-mapping mate pairs with the last line's ID
-        print $ofh "$line1$line2";
-        if (&_isUnalignedMate($flags1)) {
-          print $ofh2 $line1;
+  if ($bowtie_version == 2) {
+    
+    # Bowtie 2
+    
+    my $ifh  = IO::File->new( $alignment_file, 'r' ) or die "Can't open $alignment_file: $!";
+    my $ofh  = IO::File->new( $outfile, 'w' ) or die "Can't create $outfile: $!";
+    my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "Can't create $outfile2: $!";
+    my $prev_id         = "";
+    my $discard_this_id = 0;
+    my $mapping         = 0;
+    my @print_lines = ();
+    while ( my $line = $ifh->getline ) {
+      next if $line =~ m/^@/;
+      my @fields = split( /\t/, $line );
+      my ($mate_id, $flags) = ($fields[0], $fields[1]);
+  
+      # Check if this mate ID is different from the last line
+      if ( $mate_id ne $prev_id ) {
+        # This line is the first line with a new read ID
+        if ( scalar @print_lines == 2 && $mapping == 1 && $prev_id ne "" ) {
+          my $line1  = shift(@print_lines);
+          my @fd1    = split( /\t/, $line1 );
+          my $flags1 = $fd1[1];
+          my $line2  = shift(@print_lines);
+          my @fd2    = split( /\t/, $line2 );
+          my $flags2 = $fd2[1];
+  
+          # Print the half-mapping mate pairs with the last line's ID
+          print $ofh "$line1$line2";
+          if (&_isUnalignedMate($flags1)) {
+            print $ofh2 $line1;
+          } else {
+            print $ofh2 $line2;
+          }
+          $count++;
+        }
+  
+        # Discard mates with multiple alignments here
+        $discard_this_id = 0;
+        $prev_id         = $mate_id;
+      } else {
+        # This line is the second or greater line with this read ID
+        next if $discard_this_id;
+        if ( scalar @print_lines == 2 && $mapping == 0 ) {
+          # Found a secondary alignment preceded by two half-mapping mates. Discard all lines with this ID.
+          @print_lines     = ();
+          $discard_this_id = 1;
+          next;
+        } elsif ( scalar @print_lines == 3 ) {
+          # We have four alignments for this read pair. Discard all lines with this ID.
+          @print_lines     = ();
+          $discard_this_id = 1;
+          next;
+        }
+      }
+  
+      # At this point we have an alignment we may want to keep, so look at the sum-of-flags value to classify.
+      if ( &_isInMappingPair($flags) ) {
+        # Save this full-mapping line for printing
+        $mapping = 2;
+        push( @print_lines, $line );
+      } elsif ( &_isInNonMappingPair($flags) ) {
+        # We have a non-mapping ID. Discard all lines with this ID.
+        $mapping         = 0;
+        $discard_this_id = 1;
+      } elsif ( &_isHalfMappingMate($flags) ) {
+        # Save this half-mapping line for printing
+        $mapping = 1;
+        push( @print_lines, $line );
+      } else {
+        # We have a secondary alignment.
+        $mapping = 2;
+        push( @print_lines, $line );
+      }
+    }
+    $ifh->close;
+    $ofh->close;
+    
+    capture( "sort -k3,3 -k8n,8 -o $outfile3 $outfile" );
+    die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
+    
+  } else {
+    
+    # Bowtie 1
+    
+    # Get the alignment flags, and remove the cases where both mates fail to align
+    # We have unpaired alignments, so possible flag values are:
+    # 0 or 16 for alignment to the forward or reverse strand respectively
+    # 4 for no reported alignments
+    my $ifh = IO::File->new( $bowtie1_infile, 'r' ) or die "Can't open $bowtie1_infile: $!";
+    my $ofh = IO::File->new( $outfile4, 'w' ) or die "Can't open $outfile4: $!";
+    my $ofh2 = IO::File->new( $outfile, 'w' ) or die "Can't open $outfile: $!"; 
+    while ( my $line1 = $ifh->getline ) {
+      next if $line1 =~ m/^@/;
+  
+      # Read in both mates in the pair
+      my @a = split( /\t/, $line1 );
+      my ($mate1_id, $flags1) = ($a[0], $a[1]);
+      my $line2 = $ifh->getline;
+      my @b = split( /\t/, $line2 );
+      my ($mate2_id, $flags2) = ($b[0], $b[1]);
+      die "Error: Mates do not match. Lines: $line1 $line2" if ($mate1_id ne $mate2_id);
+      
+      # Look for half-mapping alignments where one of the two mates has no
+      # reported alignments (flags value = 4 for one mate but not for both mates)
+      if ( ($flags1 == 4) ^ ($flags2 == 4) ) {
+        # Record the unaligned mate along with the position where its paired mate aligned
+        if ($flags1 == 4) {
+          # Mate 1 is unaligned, so record mate 1 with the alignment position of mate 2, as in Bowtie 2 SAM output:
+          # For field 2, use 69 if other mate aligns to forward strand, use 101 otherwise
+          # For field 7, record the name of reference seq where mate's alignment occurs
+          # For field 8, record the offset into the fwd ref strand where mate alignment occurs
+          my $newflags;
+          if ($flags2 == 16) {
+            $a[1] = 101;
+          } else {
+            $a[1] = 69;
+          }
+          print $ofh "$a[0]\t$a[1]\t$b[2]\t$b[3]\t$a[4]\t$a[5]\t$b[2]\t$b[3]\t$a[8]\t$a[9]\t$a[10]\t$a[11]";
         } else {
-          print $ofh2 $line2;
+          if ($flags1 == 16) {
+            $b[1] = 101;
+          } else {
+            $b[1] = 69;
+          }
+          # Mate 2 is unaligned, so record mate 2 with the alignment position of mate 1
+          print $ofh "$b[0]\t$b[1]\t$a[2]\t$a[3]\t$b[4]\t$b[5]\t$a[2]\t$a[3]\t$b[8]\t$b[9]\t$b[10]\t$b[11]";
         }
         $count++;
-      }
-
-      # Discard mates with multiple alignments here
-      $discard_this_id = 0;
-      $prev_id         = $mate_id;
+        print $ofh2 "$line1$line2";
+      } 
     }
-    else {
-
-      # This line is the second or greater line with this read ID
-      next if $discard_this_id;
-
-      if ( scalar @print_lines == 2 && $mapping == 0 ) {
-
-        # Found a secondary alignment preceded by two half-mapping mates. Discard all lines with this ID.
-        @print_lines     = ();
-        $discard_this_id = 1;
-        next;
-      }
-      elsif ( scalar @print_lines == 3 ) {
-
-        # We have four alignments for this read pair. Discard all lines with this ID.
-        @print_lines     = ();
-        $discard_this_id = 1;
-        next;
-      }
-    }
-
-    # At this point we have an alignment we may want to keep, so look at the sum-of-flags value to classify.
-    if ( &_isInMappingPair($flags) ) {
-
-      # Save this full-mapping line for printing
-      $mapping = 2;
-      push( @print_lines, $line );
-    }
-    elsif ( &_isInNonMappingPair($flags) ) {
-
-      # We have a non-mapping ID. Discard all lines with this ID.
-      $mapping         = 0;
-      $discard_this_id = 1;
-    }
-    elsif ( &_isHalfMappingMate($flags) ) {
-
-      # Save this half-mapping line for printing
-      $mapping = 1;
-      push( @print_lines, $line );
-    }
-    else {
-
-      # We have a secondary alignment.
-      $mapping = 2;
-      push( @print_lines, $line );
-    }
+    $ifh->close;
+    $ofh->close;
+    $ofh2->close;
+    unlink $bowtie1_infile or die "Can't delete $bowtie1_infile: $!";
+    capture( "sort -V -k1,1 -o $outfile2 $outfile4" );
+    die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
+    unlink $outfile4 or die "Can't delete $outfile4: $!";
   }
-  $ifh->close;
-  $ofh->close;
   if ($count == 0) {
     print STDERR "No half-mapping read pairs found.\n";
     exit;
   }
-  print "Saved $count half-mapping read pair alignments.\n";
-  print "Sorting...\n";
-  capture( "sort -k3,3 -k8n,8 -o $outfile3 $outfile" );
-  die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
+  print "Identified $count half-mapping read pair alignments.\n";
 }
 
 =head2 set_fragment_length
@@ -719,7 +659,7 @@ sub create_simulated_pairs {
 
  Title   : align_simulated_pairs
  Usage   : $project->align_simulated_pairs( $num_threads )
- Function: Aligns simulated read pairs to the reference genome using Bowtie 2.
+ Function: Aligns simulated read pairs to the reference genome using Bowtie.
  Example : $project->bowtie_identify();
            $project->align_simulated_pairs( 8 );
  Returns : No return value
@@ -733,67 +673,44 @@ sub align_simulated_pairs {
   my $pairs_file_1        = shift || $self->{"sim_pairs_file_1"};
   my $pairs_file_2        = shift || $self->{"sim_pairs_file_2"};
   my $work_dir            = $self->{"work_dir"};
+  my $bowtie_version      = $self->{"bowtie_version"};
   my $reads_basename      = $self->{"reads"}->{"basename"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $index_dir           = $self->{"index_dir"};
   my $outfile             = "$work_dir/${reads_basename}_sim_pairs_alignment.sam";
+  my $unsorted_outfile    = "$work_dir/${reads_basename}_sim_pairs_alignment_unsorted.sam";
   $self->{"realignment_file"} = $outfile;
   
   return if (-z $pairs_file_1 || !(-e $pairs_file_1));
-  print "Aligning simulated paired-end reads...\n";
-  
-  # Run Bowtie with the simulated read pairs as input
-  capture(
-        "bowtie2 -x $index_dir/$ref_genome_basename "
-      . "--threads $num_threads --reorder --no-hd "
-      . "--no-mixed --no-discordant --no-contain --no-overlap "
-      . "-1 $pairs_file_1 -2 $pairs_file_2 "
-      . "-S $outfile 2> $work_dir/bowtie2_sim_pairs_stats.txt"
-  );
-  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
-}
-
-=head2 align_simulated_pairs_bowtie1
-
- Title   : align_simulated_pairs_bowtie1
- Usage   : $project->align_simulated_pairs_bowtie1( $num_threads )
- Function: Aligns simulated read pairs to the reference genome using Bowtie 1.
- Example : $project->bowtie_identify();
-           $project->align_simulated_pairs_bowtie1( 8 );
- Returns : No return value
- Args    : Number of parallel search threads to use for Bowtie
-
-=cut
-
-sub align_simulated_pairs_bowtie1 {
-  my $self                = shift;
-  my $num_threads         = shift;
-  my $pairs_file_1        = shift || $self->{"sim_pairs_file_1"};
-  my $pairs_file_2        = shift || $self->{"sim_pairs_file_2"};
-  my $work_dir            = $self->{"work_dir"};
-  my $reads_basename      = $self->{"reads"}->{"basename"};
-  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $index_dir           = $self->{"index_dir"};
-  my $outfile             = "$work_dir/${reads_basename}_sim_pairs_alignment.sam";
-  my $sorted_outfile      = "$work_dir/${reads_basename}_sim_pairs_alignment_sorted.sam"; 
-  $self->{"realignment_file"} = $sorted_outfile;
-  
-  return if (-z $pairs_file_1 || !(-e $pairs_file_1));
-  print "Aligning simulated paired-end reads...\n";
-  
-  # Run Bowtie with the simulated read pairs as input
-  capture(
-        "bowtie $index_dir/$ref_genome_basename "
-      . "--threads $num_threads "
-      . "-m 1 -1 $pairs_file_1 -2 $pairs_file_2 "
-      . "-S $outfile 2> $work_dir/bowtie2_sim_pairs_stats.txt"
-  );
-  die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
-  
-  # Sort alignment file by ID
-  capture( "sort -V -k1,1 -o $sorted_outfile $outfile" );
-  die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
-  unlink $outfile or die "$0: Can't delete $outfile: $!";
+ 
+  # Run Bowtie with the simulated read pairs as input.
+  if ($bowtie_version == 2) {
+    # Bowtie 2
+    print "Aligning simulated paired-end reads using Bowtie 2...\n";
+    capture(
+          "bowtie2 -x $index_dir/$ref_genome_basename "
+        . "--threads $num_threads --reorder --no-hd "
+        . "--no-mixed --no-discordant --no-contain --no-overlap "
+        . "-1 $pairs_file_1 -2 $pairs_file_2 "
+        . "-S $outfile 2> $work_dir/${reads_basename}_bowtie2_sim_pairs_stats.txt"
+    );
+    die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+  } else {
+    # Bowtie 1
+    print "Aligning simulated paired-end reads using Bowtie 1...\n";
+    capture(
+          "bowtie $index_dir/$ref_genome_basename "
+        . "--threads $num_threads "
+        . "-m 1 -1 $pairs_file_1 -2 $pairs_file_2 "
+        . "-S $unsorted_outfile 2> $work_dir/${reads_basename}_bowtie1_sim_pairs_stats.txt"
+    );
+    die "$0: Bowtie exited unsuccessful" if ( $EXITVAL != 0 );
+    
+    # Sort alignment file by ID
+    capture( "sort -V -k1,1 -o $outfile $unsorted_outfile" );
+    die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
+    unlink $unsorted_outfile or die "$0: Can't delete $unsorted_outfile: $!";
+  }
 }
 
 =head2 filter1
@@ -1062,8 +979,15 @@ sub assemble_groups {
       $ifh2->close;
     }
   }
-  print "Identified $count groups for assembly.\n";
-  print "Successfully assembled $num_met_cutoff contigs.\n";
+  if ($count == 0) {
+    print "No groups identified for assembly.\n";
+    return;
+  }
+  if ($num_met_cutoff > 0) {
+    print "Successfully assembled $num_met_cutoff contigs out of $count groups identified in $work_dir/assembly/\n";
+  } else {
+    print "No contigs assembled.\n";
+  }
 }
 
 =head2 build_blast_index
