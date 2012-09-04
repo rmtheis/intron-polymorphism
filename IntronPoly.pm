@@ -502,7 +502,6 @@ sub bowtie_identify {
       my $line2 = $ifh->getline;
       my @b = split( /\t/, $line2 );
       my ($mate2_id, $flags2) = ($b[0], $b[1]);
-      die "Error: Mates do not match. Lines: $line1 $line2" if ($mate1_id ne $mate2_id);
       
       # Look for half-mapping alignments where one of the two mates has no
       # reported alignments (flags value = 4 for one mate but not for both mates)
