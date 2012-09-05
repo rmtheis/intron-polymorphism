@@ -985,7 +985,7 @@ sub assemble_groups {
   if ($num_met_cutoff > 0) {
     print "Successfully assembled $num_met_cutoff contigs out of $count groups identified in $work_dir/assembly/\n";
   } else {
-    print "No contigs assembled.\n";
+    print "No contigs assembled from $count groups identified.\n";
   }
 }
 
