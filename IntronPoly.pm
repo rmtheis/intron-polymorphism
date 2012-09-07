@@ -850,7 +850,7 @@ sub assemble_groups {
   my $ofh3 = IO::File->new( $results_file, 'w' ) or die "$0: $results_file: $!";
   my @groups = ();
   my $last_pos = 0;
-  my $last_chr;
+  my $last_chr = "";
   my $last_len = 0;
   my $overlap_dist;
   my $count = 0;
