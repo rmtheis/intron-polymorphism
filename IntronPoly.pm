@@ -323,6 +323,7 @@ sub run_bowtie_mapping {
     capture(
           "bowtie $index_dir/$ref_genome_basename " .
           "--threads $num_threads " .
+          "--maxins $maxins --minins $minins " .
           "--un ${prefix}_initial_unaligned.fq " . 
           "-m 1 -1 $reads_file_one -2 $reads_file_two " .
           "-S $output_file 2> $work_dir/${reads_basename}_bowtie1_initial_mapping_stats.txt"
