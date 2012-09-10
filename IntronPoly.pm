@@ -1048,7 +1048,7 @@ sub align_groups_blast() {
   print "Aligning assembled contigs to reference genome using Blast...\n";
   
   # Call Blast to run the mapping
-  capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file" );
+  capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file -e 1e-5" );
   die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
   
   print "Alignment results saved.\n";
