@@ -1,6 +1,6 @@
 <!-- Galaxy Tool Definition File -->
-<tool id="intron_poly" name="IntronPoly" version="0.1">
-  <description></description>
+<tool id="intron_poly" name="intron-polymorphism" version="0.1">
+  <description>find intron polymorphisms</description>
   <version_command>ip_handler.pl --version</version_command>
   <command>
     ip_handler.pl 
@@ -56,7 +56,7 @@
       <when value="no" />
     </conditional>
     <param name="minMates" type="integer" value="3" label="The minimum number of mates required to form a group in the grouping step in the pipeline. (-a)" />
-    <param name="minContigLength" type="integer" value="16" label="The minimum contig length needed for assembline the mates in a group. This value is passed to the Taipan assembler. (-l)" />
+    <param name="minContigLength" type="integer" value="16" label="The minimum contig length needed for assembling the mates in a group. This value is passed to the Taipan assembler. (-l)" />
     <param name="maxIntronLength" type="integer" value="250" label="The intron length value to use when looking for groups of introns near one another. This value contributes to a distance value
 that determines whether mates are close enough together to form a group. (-m)" />
     <param name="minins" type="integer" value="0" label="The minimum fragment length for valid paired-end alignments. This value is passed to Bowtie for the initial mapping. (-I)" />
