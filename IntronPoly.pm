@@ -790,7 +790,7 @@ sub filter1 {
           && $pos > ( $other_mate_pos + $frag_length - $tolerance ) )
         )
       {
-        print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $frag_length +/- 10\n\n"
+        print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $frag_length +/- $tolerance\n\n"
           if DEBUG;
         $discard_count++;
         last;
@@ -800,8 +800,8 @@ sub filter1 {
       if ($pos == 0) {
         print $ofh2 "RETAINED because unaligned\n\n" if DEBUG;
       } else {
-        my $window_min = $other_mate_pos + $frag_length - 10;
-        my $window_max = $other_mate_pos + $frag_length + 10;
+        my $window_min = $other_mate_pos + $frag_length - $tolerance;
+        my $window_max = $other_mate_pos + $frag_length + $tolerance;
         print $ofh2 "RETAINED: other_mate_pos = $other_mate_pos; pos is $pos, which is not between $window_min and $window_max\n\n" if DEBUG;
       }
 
