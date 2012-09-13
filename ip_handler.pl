@@ -38,6 +38,7 @@ my $usage_msg = "Usage:\n"
   . "    -m/--max-intron-length        <int>        [ default: 250       ]\n"
   . "    -I/--minins                   <int>        [ default: 0         ]\n"
   . "    -X/--maxins                   <int>        [ default: 3000      ]\n"
+  . "    -t/--tolerance                <int>        [ default: 10        ]\n"
   . "    -p/--num-threads              <int>        [ default: all cores ]\n"
   . "    -s/--skip-to                  <C,F,A,L>\n"
   . "    -b/--existing-bwt-index-dir   <string>\n"
@@ -63,6 +64,7 @@ my $min_contig_length;                  # Minimum contig length for local assemb
 my $intron_length = undef;              # Expected intron length for assembly
 my $minins = undef;                     # Bowtie -I/--minins <int> value
 my $maxins = undef;                     # Bowtie -X/--maxins <int> value
+my $tolerance = undef;                  # Alignment position +/- tolerance for simulated pairs
 my $num_threads = undef;                # Number of parallel search threads to use for alignment
 my $skip_to = undef;                    # Pipeline step to skip ahead to
 my $index_dir = undef;                  # Directory containing index files for Bowtie/Blast
@@ -91,6 +93,7 @@ GetOptions(
   "m|max-intron-length:i" => \$intron_length,
   "X|maxins:i" => \$maxins,
   "I|minins:i" => \$minins,
+  "t|tolerance:s" => \$tolerance,
   "p|num-threads:s" => \$num_threads,
   "s|skip-to:s" => \$skip_to,
   "b|existing-bwt-index-dir:s" => \$index_dir,
@@ -115,6 +118,7 @@ $min_contig_length = $min_contig_length || 70;
 $intron_length = $intron_length || 250;
 $minins = $minins || 0;
 $maxins = $maxins || 3000;
+$tolerance = $tolerance || 10;
 $num_threads = $num_threads || Sys::CPU::cpu_count();
 $skip_to = $skip_to || "";
 $bowtie1 = $bowtie1 || 0;
@@ -216,7 +220,7 @@ $project->build_bowtie_index( $index_dir );
 $project->set_fragment_length( $fragment_length, $existing_alignment_file );
 $project->create_simulated_pairs( $existing_alignment_file, $existing_halfmapping_file );
 $project->align_simulated_pairs( $num_threads, $minins, $maxins );
-$project->filter1( $existing_halfmapping_file );
+$project->filter1( $tolerance, $existing_halfmapping_file );
 
 ASSEMBLY:
 $project->set_fragment_length( $fragment_length, $existing_alignment_file );

@@ -726,13 +726,15 @@ sub align_simulated_pairs {
            $project->align_simulated_pairs( 8 );
            $project->filter1();
  Returns : No return value
- Args    : Path to file containing alignments from a secondary run of Bowtie using relaxed criteria
-           (optional), path to file containing original half-mapping reads (optional)
+ Args    : Alignment tolerance, Path to file containing alignments from a secondary run of Bowtie
+           using relaxed criteria (optional), path to file containing original half-mapping
+           reads (optional)
 
 =cut
 
 sub filter1 {
   my $self                = shift;
+  my $tolerance           = shift;
   my $infile              = shift || $self->{"halfmapping_file"};
   my $realignment_file    = shift || $self->{"realignment_file"};
   my $work_dir            = $self->{"work_dir"};
@@ -780,13 +782,12 @@ sub filter1 {
 
       print $ofh2 "Original half-mapping pair unaligned mate: $line" if DEBUG;
       print $ofh2 "Simulated pair alignment line 1: $sim_line"       if DEBUG;
-      print $ofh2 "orig_pos: $other_mate_pos POS: $pos\n"            if DEBUG;
 
       # Discard simulated pairs that align close to the originally aligning mate in the half-mapping read pair
       if (
         $pos != 0
-        && ( $pos < ( $other_mate_pos + $frag_length + 10 )
-          && $pos > ( $other_mate_pos + $frag_length - 10 ) )
+        && ( $pos < ( $other_mate_pos + $frag_length + $tolerance )
+          && $pos > ( $other_mate_pos + $frag_length - $tolerance ) )
         )
       {
         print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $frag_length +/- 10\n\n"
@@ -1058,7 +1059,7 @@ sub align_groups_blast() {
   print "Aligning assembled contigs to reference genome using Blast...\n";
   
   # Call Blast to run the mapping
-  capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file" );
+  capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file -e 1e-5" );
   die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
   
   print "Alignment results saved.\n";
