@@ -215,7 +215,7 @@ FILTERING:
 $project->build_bowtie_index( $index_dir );
 $project->set_fragment_length( $fragment_length, $existing_alignment_file );
 $project->create_simulated_pairs( $existing_alignment_file, $existing_halfmapping_file );
-$project->align_simulated_pairs( $num_threads );
+$project->align_simulated_pairs( $num_threads, $minins, $maxins );
 $project->filter1( $existing_halfmapping_file );
 
 ASSEMBLY:

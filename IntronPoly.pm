@@ -21,7 +21,7 @@ use File::Basename;
 use IO::File;
 use IPC::System::Simple qw(capture $EXITVAL);
 
-use constant DEBUG => (0);    # Flag to print info for debugging
+use constant DEBUG => (1);    # Flag to print info for debugging
 
 =head2 new
 
@@ -670,6 +670,8 @@ sub create_simulated_pairs {
 sub align_simulated_pairs {
   my $self                = shift;
   my $num_threads         = shift;
+  my $minins              = shift;
+  my $maxins              = shift;
   my $pairs_file_1        = shift || $self->{"sim_pairs_file_1"};
   my $pairs_file_2        = shift || $self->{"sim_pairs_file_2"};
   my $work_dir            = $self->{"work_dir"};
@@ -701,6 +703,7 @@ sub align_simulated_pairs {
     capture(
           "bowtie $index_dir/$ref_genome_basename "
         . "--threads $num_threads "
+	. "--maxins $maxins --minins $minins "
         . "-m 1 -1 $pairs_file_1 -2 $pairs_file_2 "
         . "-S $unsorted_outfile 2> $work_dir/${reads_basename}_bowtie1_sim_pairs_stats.txt"
     );
@@ -775,9 +778,9 @@ sub filter1 {
         ($id, $pos) = ($fields[0], $fields[3]);
       }
 
-      print $ofh2 "Simulated pair alignment line 1: $sim_line"       if DEBUG;
       print $ofh2 "Original half-mapping pair unaligned mate: $line" if DEBUG;
-      print $ofh2 "orig_pos: $other_mate_pos POS: $pos\n\n"          if DEBUG;
+      print $ofh2 "Simulated pair alignment line 1: $sim_line"       if DEBUG;
+      print $ofh2 "orig_pos: $other_mate_pos POS: $pos\n"            if DEBUG;
 
       # Discard simulated pairs that align close to the originally aligning mate in the half-mapping read pair
       if (
@@ -786,13 +789,20 @@ sub filter1 {
           && $pos > ( $other_mate_pos + $frag_length - 10 ) )
         )
       {
-        print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $frag_length +/- 10\n"
+        print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $frag_length +/- 10\n\n"
           if DEBUG;
         $discard_count++;
         last;
       }
-      print $ofh2 "RETAINED: pos = $pos, other_mate_pos = $other_mate_pos\n"
-        if DEBUG;
+
+      # Print debug info about why the simulated pair was retained
+      if ($pos == 0) {
+        print $ofh2 "RETAINED because unaligned\n\n" if DEBUG;
+      } else {
+        my $window_min = $other_mate_pos + $frag_length - 10;
+        my $window_max = $other_mate_pos + $frag_length + 10;
+        print $ofh2 "RETAINED: other_mate_pos = $other_mate_pos; pos is $pos, which is not between $window_min and $window_max\n\n" if DEBUG;
+      }
 
       # Keep this mate
       print $ofh1 $line;
@@ -1048,7 +1058,7 @@ sub align_groups_blast() {
   print "Aligning assembled contigs to reference genome using Blast...\n";
   
   # Call Blast to run the mapping
-  capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file -e 1e-5" );
+  capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file" );
   die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
   
   print "Alignment results saved.\n";
