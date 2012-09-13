@@ -783,15 +783,19 @@ sub filter1 {
       print $ofh2 "Original half-mapping pair unaligned mate: $line" if DEBUG;
       print $ofh2 "Simulated pair alignment line 1: $sim_line"       if DEBUG;
 
-      # Discard simulated pairs that align close to the originally aligning mate in the half-mapping read pair
-      if (
-        $pos != 0
-        && ( $pos < ( $other_mate_pos + $frag_length + $tolerance )
-          && $pos > ( $other_mate_pos + $frag_length - $tolerance ) )
-        )
-      {
-        print $ofh2 "DISCARDED because $pos too close to $other_mate_pos plus $frag_length +/- $tolerance\n\n"
-          if DEBUG;
+      # Calculate the window for an acceptable alignment, based on which strand we expect to align to
+      my ($max_offset, $min_offset);
+      if ( $pos != 0 && !&_isOtherMateAlignedToReverseStrand($orig_flags)) {
+        $min_offset = $other_mate_pos + $frag_length - $tolerance;
+        $max_offset = $other_mate_pos + $frag_length + $tolerance;
+      } elsif ( $pos != 0 ) {
+        $min_offset = $other_mate_pos - $frag_length - $tolerance;
+        $max_offset = $other_mate_pos - $frag_length + $tolerance;        
+      }
+
+      # Discard simulated pairs that align close to the originally aligning mate in the half-mapping read pair      
+      if ( $pos != 0 && $pos < $max_offset && $pos > $min_offset ) {
+        print $ofh2 "DISCARDED because $pos between $min_offset and $max_offset\n\n" if DEBUG;
         $discard_count++;
         last;
       }
@@ -800,9 +804,7 @@ sub filter1 {
       if ($pos == 0) {
         print $ofh2 "RETAINED because unaligned\n\n" if DEBUG;
       } else {
-        my $window_min = $other_mate_pos + $frag_length - $tolerance;
-        my $window_max = $other_mate_pos + $frag_length + $tolerance;
-        print $ofh2 "RETAINED: other_mate_pos = $other_mate_pos; pos is $pos, which is not between $window_min and $window_max\n\n" if DEBUG;
+        print $ofh2 "RETAINED: other_mate_pos = $other_mate_pos; pos is $pos, which is not between $min_offset and $max_offset\n\n" if DEBUG;
       }
 
       # Keep this mate
@@ -1189,10 +1191,16 @@ sub _isFarMappingPair {
         && ((($flags2 & 4) == 0) && (($flags2 & 8) != 0)) );
 }
 
+# Returns 1 if the given sum-of-flags value indicates the other mate aligned to the reverse strand
+sub _isOtherMateAlignedToReverseStrand {
+  my $flags = int(shift);
+  return ( (($flags & 32) != 0) );
+}
+
 # Returns 1 if the given sum-of-flags value identifies a non-aligning mate, otherwise returns 0
 sub _isUnalignedMate {
   my $flags = int(shift);
-  return ( (($flags & 4) != 0) )
+  return ( (($flags & 4) != 0) );
 }
 
 # Ensures that the given folder exists, and removes trailing slash from string
