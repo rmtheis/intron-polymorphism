@@ -82,13 +82,6 @@ sub set_work_dir {
     print "Using existing output directory $work_dir\n";
   }
   $self->{"work_dir"} = $work_dir;
-
-  my $assembly_dir = "$work_dir/assembly";
-  unless ( -d $assembly_dir ) {
-    &_make_dir($assembly_dir);
-    print "Created assembly data directory $assembly_dir\n";
-  }
-  $self->{"assembly_dir"} = $assembly_dir;
   return $work_dir;
 }
 
@@ -110,6 +103,7 @@ sub build_db {
   my $ref_genome_filename  = shift;
   my $mate1s               = shift;
   my $mate2s               = shift;
+  my $work_dir             = $self->{"work_dir"};
 
   die "Cannot find $ref_genome_filename" if !(-e $ref_genome_filename);
   die "Cannot find $mate1s" if !(-e $mate1s);
@@ -132,6 +126,15 @@ sub build_db {
     $self->{"ref_genome"}->{"basename"}      = $file;
     $self->{"ref_genome"}->{"dir"}           = $dir;
   }
+  
+  # Create directory for assembly data
+  my $reads_basename = $self->{"reads"}->{"basename"};
+  my $assembly_dir = "$work_dir/${reads_basename}_assembly";
+  unless ( -d $assembly_dir ) {
+    &_make_dir($assembly_dir);
+    print "Created assembly data directory $assembly_dir\n";
+  }
+  $self->{"assembly_dir"} = $assembly_dir;
 }
 
 =head2 set_bowtie_version
@@ -912,8 +915,8 @@ sub assemble_groups {
     # Assemble groups containing at least $min_mates reads
     if ( scalar(@groups) >= $min_mates ) {
       ++$count;
-      my $samfile = "$work_dir/assembly/${reads_basename}_group$count.sam";
-      my $rawfile = "$work_dir/assembly/${reads_basename}_group$count.raw";
+      my $samfile = "$assembly_dir/${reads_basename}_group$count.sam";
+      my $rawfile = "$assembly_dir/${reads_basename}_group$count.raw";
       my $ofh = IO::File->new( $samfile, 'w' ) or die "$0: Can't open $samfile: $!";
       my $ofh2 = IO::File->new( $rawfile, 'w' ) or die "$0: Can't open $rawfile: $!";
       while ( scalar(@groups) > 0 ) {
@@ -926,7 +929,7 @@ sub assemble_groups {
       $ofh2->close;
 
       capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 8"
-           . " >> $work_dir/taipan_output.txt 2>&1" );
+           . " >> $work_dir/${reads_basename}_taipan_output.txt 2>&1" );
       die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Append this group's results to the multi-FastA output file containing all contigs
@@ -960,8 +963,8 @@ sub assemble_groups {
   # Handle the last group
   if ( scalar(@groups) >= $min_mates ) {
     ++$count;
-    my $samfile = "$work_dir/assembly/${reads_basename}_group$count.sam";
-    my $rawfile = "$work_dir/assembly/${reads_basename}_group$count.raw";
+    my $samfile = "$assembly_dir/${reads_basename}_group$count.sam";
+    my $rawfile = "$assembly_dir/${reads_basename}_group$count.raw";
     my $ofh = IO::File->new( $samfile, 'w' ) or die "$0: Can't open $samfile: $!";
     my $ofh2 = IO::File->new( $rawfile, 'w' ) or die "$0: Can't open $rawfile: $!";
     while ( scalar(@groups) > 0 ) {
@@ -974,7 +977,7 @@ sub assemble_groups {
     $ofh2->close;
 
     capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 8"
-           . " >> $work_dir/taipan_output.txt 2>&1" );
+           . " >> $work_dir/${reads_basename}_taipan_output.txt 2>&1" );
     die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
     # Append this group's results to the multi-FastA output file containing all contigs
@@ -997,7 +1000,7 @@ sub assemble_groups {
     return;
   }
   if ($num_met_cutoff > 0) {
-    print "Successfully assembled $num_met_cutoff contigs out of $count groups identified in $work_dir/assembly/\n";
+    print "Successfully assembled $num_met_cutoff contigs out of $count groups identified in $assembly_dir\n";
   } else {
     print "No contigs assembled from $count groups identified.\n";
   }
