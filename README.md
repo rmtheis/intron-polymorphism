@@ -18,8 +18,8 @@ The following packages must be installed and added to your PATH:
 
 Install required Perl modules:
 
-    cpan IPC::System::Simple
-    cpan Sys::CPU
+    sudo cpan IPC::System::Simple
+    sudo cpan Sys::CPU
 
 Install project code:
 
