@@ -3,8 +3,6 @@
 
 Discovers intron insertions and deletions from samples of closely related organisms.
 
-This project is under construction--please do not try to use it until it is finished!
-
 ## EXTERNAL DEPENDENCIES
 
 The following packages must be installed and added to your PATH:
@@ -31,6 +29,40 @@ Install project code:
 
     cd intron-polymorphism
     perl ip_handler.pl --ref-genome genome.fa -1 myfile_1.fq -2 myfile_2.fq
+
+## PARAMETERS
+
+See [arguments.md](https://github.com/rmtheis/intron-polymorphism/blob/master/arguments.md) 
+for a description of the command line parameters.
+
+```text
+Usage:
+    ip_handler.pl [required arguments] [options]
+
+Required Arguments:
+    -g/--ref-genome              <string>
+    -1/--mate1-file              <string>
+    -2/--mate2-file              <string>
+
+Options:
+    -o/--output-dir               <string>     [ default: ./ip_out  ]
+    -f/--fragment-length          <int>        [ default: detect    ]
+    -a/--min-mates                <int>        [ default: 3         ]
+    -l/--min-contig-length        <int>        [ default: 70        ]
+    -m/--max-intron-length        <int>        [ default: 250       ]
+    -I/--minins                   <int>        [ default: 0         ]
+    -X/--maxins                   <int>        [ default: 3000      ]
+    -t/--tolerance                <int>        [ default: 10        ]
+    -p/--num-threads              <int>        [ default: all cores ]
+    -s/--skip-to                  <C,F,A,L>
+    -b/--existing-bwt-index-dir   <string>
+    -w/--existing-align-file      <string>
+    -e/--existing-halfmap-file    <string>
+    -c/--existing-contigs-file    <string>
+    --bowtie1
+    --validate-reads
+    --version
+```
 
 ## LICENSE
 
