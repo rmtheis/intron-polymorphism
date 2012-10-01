@@ -197,10 +197,10 @@ if (LARGER_REARRANGEMENTS) {
 }
 if (DELETIONS) {
   print STDERR "Adding deletions...\n";
-	my $ndel = int(random_exponential(1, 3)+1);
+	my $ndel = int(random_exponential(1, 2)+1);
 	for(1..$ndel) {
 		my $break = int(rand(0.8 * length($rf)));
-		my $size = int(rand(0.1 * length($rf)));
+		my $size = int(rand(0.01 * length($rf)));
 		$rf = substr($rf, 0, $break).substr($rf, ($break + $size));
 		print STDERR "Deleting $size nt at $break\n";
 	}
@@ -209,13 +209,13 @@ if (DELETIONS) {
 
 if (INSERTIONS) {
 	print STDERR "Adding insertions...\n";
-	my $nins = int(random_exponential(1, 3)+1);
+	my $nins = int(random_exponential(1, 2)+1);
 	for(1..$nins) {
 		my $copystart = int(rand(0.8 * length($rf)));
-		my $size = int(rand(0.1 * length($rf)));
+		my $size = int(rand(0.01 * length($rf)));
 		my $break = int(rand(0.8 * length($rf)));
 		$rf = substr($rf, 0, $break).substr($rf, $copystart, $size).substr($rf, $break);
-		print STDERR "Inserting $size nt at $copystart, copied from $break\n";
+		print STDERR "Inserting $size nt at $break, copied from $copystart\n";
 	}
 	print STDERR "Added $nins Insertions\n";
 }
@@ -333,7 +333,7 @@ if($paired) {
 	}
 	close(RD1);
 	close(RD2);
-	print STDERR "Made pairs: reads_1.fq/reads_2.fq\n";
+	print STDERR "Made pairs: ${prefix}_1.fq, ${prefix}_2.fq\n";
 } else {
 	open(RD1, ">${prefix}.fq") || die;
 	for(my $i = 0; $i < scalar(@readlens); $i++) {
