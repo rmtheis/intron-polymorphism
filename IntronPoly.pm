@@ -125,6 +125,7 @@ sub build_db {
     $self->{"ref_genome"}->{"full_pathname"} = $ref_genome_filename;
     $self->{"ref_genome"}->{"basename"}      = $file;
     $self->{"ref_genome"}->{"dir"}           = $dir;
+    $self->{"ref_genome"}->{"extension"}     = $ext;
   }
   
   # Create directory for assembly data
@@ -271,6 +272,49 @@ sub build_bowtie_index {
   }
 }
 
+sub build_bwa_index {
+  my $self                 = shift;
+  my $index_dir            = shift || $self->{"index_dir"};
+  my $ref_genome           = $self->{"ref_genome"}->{"full_pathname"};
+  my $ref_genome_basename  = $self->{"ref_genome"}->{"basename"};
+  my $ref_genome_extension = $self->{"ref_genome"}->{"extension"};
+  my $bowtie_version       = $self->{"bowtie_version"};
+  $self->{"index_dir"}     = $index_dir;
+  my $mate1s               = $self->{"reads"}->{"mate1s"};
+  my $mate2s               = $self->{"reads"}->{"mate2s"};
+  my $mate_basename        = $self->{"reads"}->{"basename"};
+  my $sai1                 = $mate_basename . ".sai1";
+  my $sai2                 = $mate_basename . ".sai2";
+  $self->{"sai1"}          = $sai1;
+  $self->{"sai2"}          = $sai2;
+
+  # Copy reference genome to index directory so BWA can create index there
+  my $copied_genome = "$index_dir/$ref_genome_basename$ref_genome_extension";
+  unless ( -e $copied_genome) {
+    capture( "cp $ref_genome $copied_genome" );
+    die "$0: cp exited unsuccessful" if ( $EXITVAL != 0 );
+  }
+
+  # Create index for reference genome
+  unless ( -e "$copied_genome.amb"
+    && "$copied_genome.ann"
+    && "$copied_genome.bwt"
+    && "$copied_genome.pac"
+    && "$copied_genome.sa" )
+  {
+    # Create the BWA index.
+    print "Creating bwa index in $index_dir...\n";
+    capture( "bwa index $copied_genome" );
+    die "$0: bwa index exited unsuccessful" if ( $EXITVAL != 0 );
+  }
+
+  # Create SAI files
+  capture( "bwa aln $copied_genome $mate1s > $index_dir/$sai1" );
+  die "$0: bwa index exited unsuccessful" if ( $EXITVAL != 0 );
+  capture( "bwa aln $copied_genome $mate2s > $index_dir/$sai2" );
+  die "$0: bwa index exited unsuccessful" if ( $EXITVAL != 0 );
+}
+
 =head2 run_bowtie_mapping
 
  Title   : run_bowtie_mapping
@@ -368,6 +412,40 @@ sub run_bowtie_mapping {
     unlink "${prefix}_combined.sam" or die "Can't delete ${prefix}_combined.sam: $!";
     
   }
+}
+
+sub run_bwa_mapping {
+  my $self                  = shift;
+  my $mate1s                = $self->{"reads"}->{"mate1s"};
+  my $mate2s                = $self->{"reads"}->{"mate2s"};
+  my $ref_genome_basename   = $self->{"ref_genome"}->{"basename"};
+  my $ref_genome_extension  = $self->{"ref_genome"}->{"extension"};
+  my $index_dir             = $self->{"index_dir"};
+  my $reads_file_one        = $self->{"bowtie_db"}->{"reads_file_one"};
+  my $reads_file_two        = $self->{"bowtie_db"}->{"reads_file_two"};
+  my $work_dir              = $self->{"work_dir"};
+  my $reads_basename        = $self->{"reads"}->{"basename"};
+  my $prefix                = "$work_dir/${reads_basename}";
+  my $output_file           = "${prefix}_initial_alignments.sam";
+  $self->{"alignment_file"} = $output_file;
+  my $sai1                  = $self->{"sai1"};
+  my $sai2                  = $self->{"sai2"};
+
+  # Call BWA to run the mapping
+  print "Mapping using BWA...\n";
+  my $ref = "$index_dir/$ref_genome_basename$ref_genome_extension";
+  capture("bwa sampe $ref $index_dir/$sai1 $index_dir/$sai2 $mate1s $mate2s > $output_file"
+      #. "--threads $num_threads --reorder --no-hd "
+      #. "-k 3 -1 $reads_file_one -2 $reads_file_two "
+      #. "-S $output_file 2> $work_dir/${reads_basename}_bowtie2_initial_mapping_stats.txt"
+  );
+  die "$0: BWA exited unsuccessful" if ( $EXITVAL != 0 );
+
+  # Identify the unaligned mates, and try to align them individually
+
+
+
+  print "Saved alignment data to $output_file\n";
 }
 
 =head2 bowtie_identify

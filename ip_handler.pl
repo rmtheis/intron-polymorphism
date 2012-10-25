@@ -209,7 +209,9 @@ use constant USE_BOWTIE_1 => (0);
 
 $project->mapping_setup( $index_dir, $validate_reads );
 $project->build_bowtie_index( $index_dir );
+#$project->build_bwa_index( $index_dir );
 $project->run_bowtie_mapping( $num_threads, $minins, $maxins );
+#$project->run_bwa_mapping();
 
 COLLECTION:
 $project->build_bowtie_index( $index_dir );
