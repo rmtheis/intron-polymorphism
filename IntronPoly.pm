@@ -82,6 +82,13 @@ sub set_work_dir {
     print "Using existing output directory $work_dir\n";
   }
   $self->{"work_dir"} = $work_dir;
+
+  my $assembly_dir = "$work_dir/assembly";
+  unless ( -d $assembly_dir ) {
+    &_make_dir($assembly_dir);
+    print "Created assembly data directory $assembly_dir\n";
+  }
+  $self->{"assembly_dir"} = $assembly_dir;
   return $work_dir;
 }
 
@@ -103,7 +110,6 @@ sub build_db {
   my $ref_genome_filename  = shift;
   my $mate1s               = shift;
   my $mate2s               = shift;
-  my $work_dir             = $self->{"work_dir"};
 
   die "Cannot find $ref_genome_filename" if !(-e $ref_genome_filename);
   die "Cannot find $mate1s" if !(-e $mate1s);
@@ -127,15 +133,6 @@ sub build_db {
     $self->{"ref_genome"}->{"dir"}           = $dir;
     $self->{"ref_genome"}->{"extension"}     = $ext;
   }
-  
-  # Create directory for assembly data
-  my $reads_basename = $self->{"reads"}->{"basename"};
-  my $assembly_dir = "$work_dir/${reads_basename}_assembly";
-  unless ( -d $assembly_dir ) {
-    &_make_dir($assembly_dir);
-    print "Created assembly data directory $assembly_dir\n";
-  }
-  $self->{"assembly_dir"} = $assembly_dir;
 }
 
 =head2 set_bowtie_version
@@ -820,7 +817,6 @@ sub filter1 {
   my $realignment_file    = shift || $self->{"realignment_file"};
   my $work_dir            = $self->{"work_dir"};
   my $reads_basename      = $self->{"reads"}->{"basename"};
-  my $frag_length         = $self->{"frag_length"};
   my $debug_file          = "$work_dir/${reads_basename}_sim_pairs_alignment.debug" if DEBUG;
   my $outfile             = "$work_dir/${reads_basename}_filtered.sam";
 
@@ -843,11 +839,14 @@ sub filter1 {
   while ( my $line = $ifh2->getline ) {
     next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
-    my ($orig_id, $orig_flags, $other_mate_pos) = ($fields[0], $fields[1], $fields[7]);
+    my ($orig_id, $orig_flags, $other_mate_pos, $seq) = ($fields[0], $fields[1], $fields[7], $fields[9]);
 
     # Consider only the unaligned mate from the half-mapping read pair
     next if !&_isUnalignedMate($orig_flags);
     $read_count++;
+    
+    # Determine the fragment length for this individual read
+    my $frag_length = length($seq);
 
     # Get the corresponding alignment from the simulated pairs
     my $sim_line;
@@ -993,8 +992,8 @@ sub assemble_groups {
     # Assemble groups containing at least $min_mates reads
     if ( scalar(@groups) >= $min_mates ) {
       ++$count;
-      my $samfile = "$assembly_dir/${reads_basename}_group$count.sam";
-      my $rawfile = "$assembly_dir/${reads_basename}_group$count.raw";
+      my $samfile = "$work_dir/assembly/${reads_basename}_group$count.sam";
+      my $rawfile = "$work_dir/assembly/${reads_basename}_group$count.raw";
       my $ofh = IO::File->new( $samfile, 'w' ) or die "$0: Can't open $samfile: $!";
       my $ofh2 = IO::File->new( $rawfile, 'w' ) or die "$0: Can't open $rawfile: $!";
       while ( scalar(@groups) > 0 ) {
@@ -1007,7 +1006,7 @@ sub assemble_groups {
       $ofh2->close;
 
       capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 8"
-           . " >> $work_dir/${reads_basename}_taipan_output.txt 2>&1" );
+           . " >> $work_dir/taipan_output.txt 2>&1" );
       die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Append this group's results to the multi-FastA output file containing all contigs
@@ -1041,8 +1040,8 @@ sub assemble_groups {
   # Handle the last group
   if ( scalar(@groups) >= $min_mates ) {
     ++$count;
-    my $samfile = "$assembly_dir/${reads_basename}_group$count.sam";
-    my $rawfile = "$assembly_dir/${reads_basename}_group$count.raw";
+    my $samfile = "$work_dir/assembly/${reads_basename}_group$count.sam";
+    my $rawfile = "$work_dir/assembly/${reads_basename}_group$count.raw";
     my $ofh = IO::File->new( $samfile, 'w' ) or die "$0: Can't open $samfile: $!";
     my $ofh2 = IO::File->new( $rawfile, 'w' ) or die "$0: Can't open $rawfile: $!";
     while ( scalar(@groups) > 0 ) {
@@ -1055,7 +1054,7 @@ sub assemble_groups {
     $ofh2->close;
 
     capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 8"
-           . " >> $work_dir/${reads_basename}_taipan_output.txt 2>&1" );
+           . " >> $work_dir/taipan_output.txt 2>&1" );
     die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
     # Append this group's results to the multi-FastA output file containing all contigs
@@ -1078,7 +1077,7 @@ sub assemble_groups {
     return;
   }
   if ($num_met_cutoff > 0) {
-    print "Successfully assembled $num_met_cutoff contigs out of $count groups identified in $assembly_dir\n";
+    print "Successfully assembled $num_met_cutoff contigs out of $count groups identified in $work_dir/assembly/\n";
   } else {
     print "No contigs assembled from $count groups identified.\n";
   }
