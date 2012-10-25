@@ -423,7 +423,7 @@ sub run_bwa_mapping {
   my $work_dir              = $self->{"work_dir"};
   my $reads_basename        = $self->{"reads"}->{"basename"};
   my $prefix                = "$work_dir/${reads_basename}";
-  my $output_file           = "${prefix}_initial_alignments.sam";
+  my $output_file           = "${prefix}_initial_alignments_bwa.sam";
   $self->{"alignment_file"} = $output_file;
   my $sai1                  = $self->{"sai1"};
   my $sai2                  = $self->{"sai2"};
