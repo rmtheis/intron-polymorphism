@@ -21,7 +21,8 @@ use Getopt::Long;
 use IO::File;
 
 my $usage_msg =
-  "Converts a SAM format file to paired-end Fastq. IDs must end with '/1' or '/2'\n"
+  "Converts a SAM format file to paired-end Fastq. SAM flags determine whether mates are mate 1 or mate 2.\n"
+  . "Non-mapping pairs and secondary alignments are discarded.\n"
   . "Usage: sam2pefastq.pl -i sam_file -1 outfile1.fq -2 outfile2.fq\n";
 die $usage_msg unless ( @ARGV );
 my ($input_file, $output_file1, $output_file2);
@@ -43,12 +44,12 @@ while ( my $line = $ifh->getline ) {
   next if (IntronPoly::_isSecondaryAlignment($flags) != 0);
 
   # Write Fastq output
-  if (substr($id, -2) eq "/1") {
+  if (IntronPoly::_isMateOneInPair($flags) != 0) {
     print $ofh1 "@" . "${id}\n";
     print $ofh1 "$seq\n";
     print $ofh1 "+\n";
     print $ofh1 "$qual\n";
-  } elsif (substr($id, -2) eq "/2") {
+  } else {
     print $ofh2 "@" . "${id}\n";
     print $ofh2 "$seq\n";
     print $ofh2 "+\n";
