@@ -291,7 +291,7 @@ sub build_bwa_index {
     capture( "cp $ref_genome $copied_genome" );
     die "$0: cp exited unsuccessful" if ( $EXITVAL != 0 );
   }
-
+  
   # Create index for reference genome
   unless ( -e "$copied_genome.amb"
     && "$copied_genome.ann"
@@ -301,15 +301,17 @@ sub build_bwa_index {
   {
     # Create the BWA index.
     print "Creating bwa index in $index_dir...\n";
-    capture( "bwa index $copied_genome" );
+    capture( "bwa index $copied_genome > $index_dir/$ref_genome_basename.out 2> $index_dir/$ref_genome_basename.err" );
     die "$0: bwa index exited unsuccessful" if ( $EXITVAL != 0 );
   }
 
   # Create SAI files
-  capture( "bwa aln $copied_genome $mate1s > $index_dir/$sai1" );
-  die "$0: bwa index exited unsuccessful" if ( $EXITVAL != 0 );
-  capture( "bwa aln $copied_genome $mate2s > $index_dir/$sai2" );
-  die "$0: bwa index exited unsuccessful" if ( $EXITVAL != 0 );
+  unless ( -e "$index_dir/$sai1" && "$index_dir/$sai2") {
+    capture( "bwa aln $copied_genome $mate1s > $index_dir/$sai1 2> $mate1s.err" );
+    die "$0: bwa aln exited unsuccessful" if ( $EXITVAL != 0 );
+    capture( "bwa aln $copied_genome $mate2s > $index_dir/$sai2 2> $mate2s.err" );
+    die "$0: bwa aln exited unsuccessful" if ( $EXITVAL != 0 );
+  }
 }
 
 =head2 run_bowtie_mapping
@@ -411,6 +413,17 @@ sub run_bowtie_mapping {
   }
 }
 
+=head2 run_bwa_mapping
+
+ Title   : run_bwa_mapping
+ Usage   : 
+ Function: 
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
 sub run_bwa_mapping {
   my $self                  = shift;
   my $mate1s                = $self->{"reads"}->{"mate1s"};
@@ -421,28 +434,40 @@ sub run_bwa_mapping {
   my $reads_file_one        = $self->{"bowtie_db"}->{"reads_file_one"};
   my $reads_file_two        = $self->{"bowtie_db"}->{"reads_file_two"};
   my $work_dir              = $self->{"work_dir"};
+  my $scripts_dir             = $self->{"scripts_dir"};
   my $reads_basename        = $self->{"reads"}->{"basename"};
   my $prefix                = "$work_dir/${reads_basename}";
-  my $output_file           = "${prefix}_initial_alignments_bwa.sam";
-  $self->{"alignment_file"} = $output_file;
+  my $initial_align_file    = "${prefix}_initial_alignments.sam";
+  $self->{"alignment_file"} = $initial_align_file;
   my $sai1                  = $self->{"sai1"};
   my $sai2                  = $self->{"sai2"};
+  my $second_align_file     = "${prefix}_unaligned.sam";
 
   # Call BWA to run the mapping
   print "Mapping using BWA...\n";
   my $ref = "$index_dir/$ref_genome_basename$ref_genome_extension";
-  capture("bwa sampe $ref $index_dir/$sai1 $index_dir/$sai2 $mate1s $mate2s > $output_file"
-      #. "--threads $num_threads --reorder --no-hd "
-      #. "-k 3 -1 $reads_file_one -2 $reads_file_two "
-      #. "-S $output_file 2> $work_dir/${reads_basename}_bowtie2_initial_mapping_stats.txt"
+  capture("bwa sampe $ref $index_dir/$sai1 $index_dir/$sai2 $mate1s $mate2s > $initial_align_file " .
+          "2> $work_dir/${reads_basename}_bwa_initial_mapping_stats.txt"
   );
   die "$0: BWA exited unsuccessful" if ( $EXITVAL != 0 );
 
-  # Identify the unaligned mates, and try to align them individually
-
-
-
-  print "Saved alignment data to $output_file\n";
+  # Write the unaligned mates to a file
+  my $ifh = IO::File->new( $initial_align_file, 'r' ) or die "Can't open $initial_align_file: $!";
+  my $ofh = IO::File->new( $second_align_file, 'w' ) or die "Can't open $second_align_file: $!";
+  my $prev_id         = "";
+  my $discard_this_id = 0;
+  my $mapping         = 0;
+  my @print_lines = ();
+  while ( my $line = $ifh->getline ) {
+    next if $line =~ m/^@/;
+    my @fields = split( /\t/, $line );
+    my ($mate_id, $flags) = ($fields[0], $fields[1]);
+    if (&_isInNonMappingPair($flags)) {
+      print $ofh $line;
+    }
+  }
+  close $ifh;
+  close $ofh;
 }
 
 =head2 bowtie_identify
@@ -626,6 +651,69 @@ sub bowtie_identify {
   print "Identified $count half-mapping read pair alignments.\n";
 }
 
+=head2 bwa_identify
+
+ Title   : bwa_identify
+ Usage   : 
+ Function: 
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
+sub bwa_identify {
+  my $self                    = shift;
+  my $alignment_file          = shift || $self->{"alignment_file"};
+  my $reads_basename          = $self->{"reads"}->{"basename"};
+  my $scripts_dir             = $self->{"scripts_dir"};
+  my $work_dir                = $self->{"work_dir"};
+  my $outfile                 = "$work_dir/${reads_basename}_halfm_pairs.sam";
+  my $outfile2                = "$work_dir/${reads_basename}_halfm_unal_mates.sam";
+  my $outfile4                = "$work_dir/${reads_basename}_halfm_unal_mates_unsorted.sam";
+  $self->{"halfmapping_file"} = $outfile2;
+  
+  if (!-e $alignment_file) {
+    print STDERR "Alignment file not found.\n";
+    return;
+  }
+  $scripts_dir =~ s!/*$!/! if ($scripts_dir ne ""); # Add trailing slash if not already present
+  print "Identifying half-mapping read pairs...\n";
+  my $count = 0;
+  my $ifh  = IO::File->new( $alignment_file, 'r' ) or die "Can't open $alignment_file: $!";
+  my $ofh  = IO::File->new( $outfile4, 'w' ) or die "Can't create $outfile4: $!";
+  my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "Can't create $outfile2: $!";
+  my $prev_id         = "";
+  my $discard_this_id = 0;
+  my $mapping         = 0;
+  my @print_lines = ();
+  while ( my $line1 = $ifh->getline ) {
+    next if $line1 =~ m/^@/;
+    my @fields1 = split( /\t/, $line1 );
+    my ($mate_id1, $flags1) = ($fields1[0], $fields1[1]);
+
+    my $line2 = $ifh->getline;
+    my @fields2 = split( /\t/, $line2 );
+    my ($mate_id2, $flags2) = ($fields2[0], $fields2[1]);
+
+    if (&_isHalfMappingPair($flags1, $flags2)) {
+      print $ofh "$line1$line2";
+      if (&_isUnalignedMate($flags1)) {
+        print $ofh2 $line1;
+      } else {
+        print $ofh2 $line2;
+      }
+    }
+  }
+  $ifh->close;
+  $ofh->close;
+  $ofh2->close;
+  
+  capture( "sort -V -k1,1 -o $outfile2 $outfile4" );
+  die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
+  unlink $outfile4 or die "Can't delete $outfile4: $!";
+}  
+
 =head2 set_fragment_length
 
  Title   : set_fragment_length
@@ -701,7 +789,8 @@ sub create_simulated_pairs {
     next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
     my ($id, $flags, $sequence, $quality_scores) = ($fields[0], $fields[1], $fields[9], $fields[10]);
-
+    $quality_scores =~ s/^\s+|\s+$//g; # Remove leading/trailing whitespace
+    
     # Simulate a read pair from the unaligned mate in the pair
     if ( &_isUnalignedMate($flags) ) {
 
@@ -733,19 +822,19 @@ sub create_simulated_pairs {
   print STDERR "No half-mapping read pairs found.\n" if ( !$have_candidates );
 }
 
-=head2 align_simulated_pairs
+=head2 align_simulated_pairs_bowtie
 
- Title   : align_simulated_pairs
- Usage   : $project->align_simulated_pairs( $num_threads )
+ Title   : align_simulated_pairs_bowtie
+ Usage   : $project->align_simulated_pairs_bowtie( $num_threads )
  Function: Aligns simulated read pairs to the reference genome using Bowtie.
  Example : $project->bowtie_identify();
-           $project->align_simulated_pairs( 8 );
+           $project->align_simulated_pairs_bowtie( 8 );
  Returns : No return value
  Args    : Number of parallel search threads to use for Bowtie
 
 =cut
 
-sub align_simulated_pairs {
+sub align_simulated_pairs_bowtie {
   my $self                = shift;
   my $num_threads         = shift;
   my $minins              = shift;
@@ -794,6 +883,59 @@ sub align_simulated_pairs {
   }
 }
 
+=head2 align_simulated_pairs_bwa
+
+ Title   : align_simulated_pairs_bwa
+ Usage   : 
+ Function: 
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
+sub align_simulated_pairs_bwa {
+  my $self                 = shift;
+  my $num_threads          = shift;
+  my $minins               = shift;
+  my $maxins               = shift;
+  my $pairs_file_1         = shift || $self->{"sim_pairs_file_1"};
+  my $pairs_file_2         = shift || $self->{"sim_pairs_file_2"};
+  my $work_dir             = $self->{"work_dir"};
+  my $reads_basename       = $self->{"reads"}->{"basename"};
+  my $ref_genome_basename  = $self->{"ref_genome"}->{"basename"};
+  my $ref_genome_extension = $self->{"ref_genome"}->{"extension"};
+  my $index_dir            = $self->{"index_dir"};
+  my $outfile              = "$work_dir/${reads_basename}_sim_pairs_alignment.sam";
+  my $unsorted_outfile     = "$work_dir/${reads_basename}_sim_pairs_alignment_unsorted.sam";
+  $self->{"realignment_file"} = $outfile;  
+  
+  return if (-z $pairs_file_1 || !(-e $pairs_file_1));
+  print "Aligning simulated paired-end reads using BWA...\n";
+  
+  # Create the index for the simulated pairs
+  my $copied_genome = "$index_dir/$ref_genome_basename$ref_genome_extension";
+  my $sai1 = $pairs_file_1;
+  $sai1 =~ s/(\.[^.]+)$/.sai/;
+  my $sai2 = $pairs_file_2;
+  $sai2 =~ s/(\.[^.]+)$/.sai/;
+  capture( "bwa aln $copied_genome $pairs_file_1 > $sai1 2> $sai1.err" );
+  die "$0: bwa aln exited unsuccessful" if ( $EXITVAL != 0 );
+  capture( "bwa aln $copied_genome $pairs_file_2 > $sai2 2> $sai2.err" );
+  die "$0: bwa aln exited unsuccessful" if ( $EXITVAL != 0 );
+  
+  # Align the simulated pairs to the reference genome
+  capture("bwa sampe $copied_genome $sai1 $sai2 $pairs_file_1 $pairs_file_2 > $unsorted_outfile " .
+          "2> $work_dir/${reads_basename}_bwa_sim_pairs_mapping_stats.txt"
+  );
+  die "$0: BWA exited unsuccessful" if ( $EXITVAL != 0 );
+  
+  # Sort alignment file by ID
+  capture( "sort -V -k1,1 -o $outfile $unsorted_outfile" );
+  die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
+  unlink $unsorted_outfile or die "$0: Can't delete $unsorted_outfile: $!";
+}
+
 =head2 filter1
 
  Title   : filter1
@@ -840,14 +982,14 @@ sub filter1 {
     next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
     my ($orig_id, $orig_flags, $other_mate_pos, $seq) = ($fields[0], $fields[1], $fields[7], $fields[9]);
-
+    
     # Consider only the unaligned mate from the half-mapping read pair
     next if !&_isUnalignedMate($orig_flags);
     $read_count++;
     
     # Determine the fragment length for this individual read
     my $frag_length = length($seq);
-
+    
     # Get the corresponding alignment from the simulated pairs
     my $sim_line;
     while ( $sim_line = $ifh1->getline ) {
@@ -1262,6 +1404,32 @@ sub _isInNonMappingPair {
   return ( (($flags & 4) != 0) && (($flags & 8) != 0) );
 }
 
+# Returns 1 if the given sum-of-flags value identifies a mate in a pair that aligns discordantly, otherwise returns 0
+# Discordant alignments are those in which the mates overlap, or both mates map to the same strand
+sub _isInDiscordantPair {
+  my $flags = int(shift);
+  return ( ($flags == 65 || $flags == 81 || $flags == 97 || $flags == 113 || $flags == 117 ||
+            $flags == 129 || $flags == 145 || $flags == 161 || $flags == 177 || $flags == 181) );
+}
+
+# Returns 1 if the given sum-of-flags values represent a pair that aligns discordantly, otherwise returns 0
+# Discordant alignments are those in which the mates overlap, or both mates map to the same strand
+sub _isDiscordantPair {
+  my $flags1 = int(shift);
+  my $flags2 = int(shift);
+  return ( _isInDiscordantPair($flags1) || _isInDiscordantPair($flags2));
+}
+
+# Returns 1 if the given sum-of-flags values represent a half-mapping read pair, otherwise returns 0
+sub _isHalfMappingPair {
+  my $flags1 = int(shift);
+  my $flags2 = int(shift);
+  return ( ($flags1 == 69 && $flags2 == 137)
+        || ($flags1 == 73 && $flags2 == 133)
+        || ($flags1 == 89 && $flags2 == 165)
+        || ($flags1 == 101 && $flags2 == 153) );
+}
+
 # Returns 1 if the given sum-of-flags values represent a read pair containing mates that align independently but
 # do not meet fragment length constraints, otherwise returns 0
 sub _isFarMappingPair {
@@ -1275,6 +1443,12 @@ sub _isFarMappingPair {
 sub _isOtherMateAlignedToReverseStrand {
   my $flags = int(shift);
   return ( (($flags & 32) != 0) );
+}
+
+# Returns 1 if the given sum-of-flags value indicates the mate is mate 1 in the pair, otherwise returns 0
+sub _isMateOneInPair {
+  my $flags = int(shift);
+  return ( (($flags & 64) != 0))
 }
 
 # Returns 1 if the given sum-of-flags value identifies a non-aligning mate, otherwise returns 0

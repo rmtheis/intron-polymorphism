@@ -40,11 +40,6 @@ my $usage_msg = "Usage:\n"
   . "    -X/--maxins                   <int>        [ default: 3000      ]\n"
   . "    -t/--tolerance                <int>        [ default: 10        ]\n"
   . "    -p/--num-threads              <int>        [ default: all cores ]\n"
-  . "    -s/--skip-to                  <C,F,A,L>\n"
-  . "    -b/--existing-bwt-index-dir   <string>\n"
-  . "    -w/--existing-align-file      <string>\n"
-  . "    -e/--existing-halfmap-file    <string>\n"
-  . "    -c/--existing-contigs-file    <string>\n"
   . "    --bowtie1\n"
   . "    --validate-reads\n"
   . "    --version\n";
@@ -68,9 +63,6 @@ my $tolerance = undef;                  # Alignment position +/- tolerance for s
 my $num_threads = undef;                # Number of parallel search threads to use for alignment
 my $skip_to = undef;                    # Pipeline step to skip ahead to
 my $index_dir = undef;                  # Directory containing index files for Bowtie/Blast
-my $existing_alignment_file = undef;    # Path to existing SAM alignment data. Leave as undef for new run
-my $existing_halfmapping_file = undef;  # Path to existing SAM halfmapping mate data. Leave as undef for new run
-my $existing_contigs_file = undef;      # Path to existing multi-Fasta contigs data. Leave as undef for new run
 my $bowtie1 = undef;                    # Flag to use Bowtie 1 instead of Bowtie 2
 my $validate_reads;                     # Flag indicating whether to validate Fastq reads file
 my $version;                            # Flag to print version number and exit
@@ -96,17 +88,12 @@ GetOptions(
   "t|tolerance:s" => \$tolerance,
   "p|num-threads:s" => \$num_threads,
   "s|skip-to:s" => \$skip_to,
-  "b|existing-bwt-index-dir:s" => \$index_dir,
-  "w|existing-align-file:s" => \$existing_alignment_file,
-  "e|existing-halfmap-file:s" => \$existing_halfmapping_file,
-  "c|existing-contigs-file:s" => \$existing_contigs_file,
   "bowtie1" => \$bowtie1,
   "validate-reads" => \$validate_reads,
   "v|version" => \$version,
   "h|help" => \$help,
 ) || die "$0: Bad option";
 die $usage_msg unless ( (defined $ref_genome_file && defined $mate1s && defined $mate2s)
-    || (defined $ref_genome_file && (defined $existing_halfmapping_file || defined $existing_contigs_file))
     || defined $version || defined $help );
 
 # Use defaults for undefined values
@@ -122,10 +109,7 @@ $tolerance = $tolerance || 10;
 $num_threads = $num_threads || Sys::CPU::cpu_count();
 $skip_to = $skip_to || "";
 $bowtie1 = $bowtie1 || 0;
-$index_dir = $index_dir || $ENV{HOME} . "/intron-polymorphism/index";
-$existing_alignment_file = $existing_alignment_file || "";
-$existing_halfmapping_file = $existing_halfmapping_file || "";
-$existing_contigs_file = $existing_contigs_file || "";
+$index_dir = $index_dir || "./index";
 $validate_reads = $validate_reads || 0;
 
 # Print version number if requested
@@ -140,29 +124,11 @@ if ($help) {
   exit;
 }
 
-# If jumping to a later pipeline step, ensure required files are available
-if ( $skip_to eq "C" && !defined $existing_alignment_file ) {
-  die "Must specify --existing-align-file with '--skip_to C'\n";
-}
-if ( ($skip_to eq "F" && !(defined $existing_alignment_file && defined $existing_halfmapping_file)) ) {
-  die "Must specify --existing-align-file and --existing_halfmap-file with '--skip_to F'\n";
-}
-if ( ($skip_to eq "A" && !(defined $existing_alignment_file && defined $existing_halfmapping_file)) ) {
-  die "Must specify --existing-align-file and --existing_halfmap-file with '--skip_to A'\n";
-}
-if ( $skip_to eq "L" && !defined $existing_contigs_file ) {
-  die "Must specify --existing-contigs-file with '--skip_to L'\n";
-}
-
 # Resolve relative pathnames
 $mate1s =~ s/^~/$ENV{HOME}/;
 $mate2s =~ s/^~/$ENV{HOME}/;
 $ref_genome_file =~ s/^~/$ENV{HOME}/;
 $output_dir =~ s/^~/$ENV{HOME}/;
-$index_dir =~ s/^~/$ENV{HOME}/;
-$existing_alignment_file =~ s/^~/$ENV{HOME}/;
-$existing_halfmapping_file =~ s/^~/$ENV{HOME}/;
-$existing_contigs_file =~ s/^~/$ENV{HOME}/;
 
 # Initialize the project
 my $project = IntronPoly->new();
@@ -192,46 +158,38 @@ die "bowtie2 not available on PATH" if system("bowtie2 --version >/dev/null 2>/d
 die "taipan not available on PATH" if system("which taipan >/dev/null 2>/dev/null") != 0;
 die "clustalw not available on PATH" if system("which clustalw >/dev/null 2>/dev/null") != 0;
 
-##############################
-# JUMP TO THE REQUESTED STEP #
-##############################
-
-if ( $skip_to eq "C" ) { print "Skipping to collecting\n"; goto COLLECTION; }
-if ( $skip_to eq "F" ) { print "Skipping to filtering\n";  goto FILTERING; }
-if ( $skip_to eq "A" ) { print "Skipping to assembly\n";   goto ASSEMBLY; }
-if ( $skip_to eq "L" ) { print "Skipping to alignment\n";  goto ALIGNMENT; }
-
 ####################
 # RUN THE PIPELINE #
 ####################
 
-use constant USE_BOWTIE_1 => (0);
-
 $project->mapping_setup( $index_dir, $validate_reads );
+#$project->build_bowtie_index( $index_dir );
+$project->build_bwa_index( $index_dir );
+#$project->run_bowtie_mapping( $num_threads, $minins, $maxins );
+$project->run_bwa_mapping();
+
+#COLLECTION:
+#$project->build_bowtie_index( $index_dir );
+#$project->bowtie_identify( $existing_alignment_file );
+$project->bwa_identify();
+
+#FILTERING:
 $project->build_bowtie_index( $index_dir );
-#$project->build_bwa_index( $index_dir );
-$project->run_bowtie_mapping( $num_threads, $minins, $maxins );
-#$project->run_bwa_mapping();
+$project->set_fragment_length( $fragment_length );
+$project->create_simulated_pairs();
+#$project->align_simulated_pairs_bowtie( $num_threads, $minins, $maxins );
+$project->align_simulated_pairs_bwa();
+$project->filter1( $tolerance );
+exit;
 
-COLLECTION:
-$project->build_bowtie_index( $index_dir );
-$project->bowtie_identify( $existing_alignment_file );
+#ASSEMBLY:
+$project->set_fragment_length( $fragment_length );
+$project->assemble_groups( $intron_length, $min_mates, $min_contig_length );
 
-FILTERING:
-$project->build_bowtie_index( $index_dir );
-$project->set_fragment_length( $fragment_length, $existing_alignment_file );
-$project->create_simulated_pairs( $existing_alignment_file, $existing_halfmapping_file );
-$project->align_simulated_pairs( $num_threads, $minins, $maxins );
-$project->filter1( $tolerance, $existing_halfmapping_file );
-
-ASSEMBLY:
-$project->set_fragment_length( $fragment_length, $existing_alignment_file );
-$project->assemble_groups( $intron_length, $min_mates, $min_contig_length, $existing_halfmapping_file );
-
-ALIGNMENT:
+#ALIGNMENT:
 $project->build_blast_index( $index_dir );
-$project->align_groups_blast( $existing_contigs_file );
-#$project->align_groups_clustal( $existing_contigs_file, $output_file );
+$project->align_groups_blast();
+#$project->align_groups_clustal( $output_file );
 
 # Copy latest run to "run-latest" directory for quickly locating the last-run results
 #system( "rm -rf run-latest/*" );

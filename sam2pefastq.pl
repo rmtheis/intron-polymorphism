@@ -55,7 +55,6 @@ while ( my $line = $ifh->getline ) {
     print $ofh2 "+\n";
     print $ofh2 "$qual\n";
   }
-
 }
 $ifh->close;
 exit;
