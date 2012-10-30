@@ -669,9 +669,9 @@ sub bwa_identify {
   my $scripts_dir             = $self->{"scripts_dir"};
   my $work_dir                = $self->{"work_dir"};
   my $outfile                 = "$work_dir/${reads_basename}_halfm_pairs.sam";
-  my $outfile2                = "$work_dir/${reads_basename}_halfm_unal_mates.sam";
-  my $outfile4                = "$work_dir/${reads_basename}_halfm_unal_mates_unsorted.sam";
-  $self->{"halfmapping_file"} = $outfile2;
+  my $outfile2                = "$work_dir/${reads_basename}_halfm_unal_mates_unsorted.sam";
+  my $outfile4                = "$work_dir/${reads_basename}_halfm_unal_mates.sam";
+  $self->{"halfmapping_file"} = $outfile4;
   
   if (!-e $alignment_file) {
     print STDERR "Alignment file not found.\n";
@@ -681,7 +681,7 @@ sub bwa_identify {
   print "Identifying half-mapping read pairs...\n";
   my $count = 0;
   my $ifh  = IO::File->new( $alignment_file, 'r' ) or die "Can't open $alignment_file: $!";
-  my $ofh  = IO::File->new( $outfile4, 'w' ) or die "Can't create $outfile4: $!";
+  my $ofh  = IO::File->new( $outfile, 'w' ) or die "Can't create $outfile: $!";
   my $ofh2 = IO::File->new( $outfile2, 'w' ) or die "Can't create $outfile2: $!";
   my $prev_id         = "";
   my $discard_this_id = 0;
@@ -709,9 +709,9 @@ sub bwa_identify {
   $ofh->close;
   $ofh2->close;
   
-  capture( "sort -V -k1,1 -o $outfile2 $outfile4" );
+  capture( "sort -V -k1,1 -o $outfile4 $outfile2" );
   die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 );
-  unlink $outfile4 or die "Can't delete $outfile4: $!";
+  unlink $outfile2 or die "Can't delete $outfile2: $!";
 }  
 
 =head2 set_fragment_length
@@ -941,14 +941,13 @@ sub align_simulated_pairs_bwa {
  Title   : filter1
  Usage   : $project->filter1();
  Function: Creates a filtered list of alignments, removing half-mapping read pairs whose unaligned
-           mates were successfully aligned to the reference genome using relaxed mapping criteria
+           mates were successfully aligned to the reference genome as a simulated paired-end read
  Example : $project->bowtie_identify();
            $project->align_simulated_pairs( 8 );
            $project->filter1();
  Returns : No return value
- Args    : Alignment tolerance, Path to file containing alignments from a secondary run of Bowtie
-           using relaxed criteria (optional), path to file containing original half-mapping
-           reads (optional)
+ Args    : Alignment tolerance, path to file containing original half-mapping reads (optional),
+           path to file containing alignments from alignment of simulated paired-end reads
 
 =cut
 
@@ -959,15 +958,16 @@ sub filter1 {
   my $realignment_file    = shift || $self->{"realignment_file"};
   my $work_dir            = $self->{"work_dir"};
   my $reads_basename      = $self->{"reads"}->{"basename"};
+  my $frag_length         = $self->{"frag_length"};
   my $debug_file          = "$work_dir/${reads_basename}_sim_pairs_alignment.debug" if DEBUG;
   my $outfile             = "$work_dir/${reads_basename}_filtered.sam";
-
+  
   # Save the filtered results in the place of the half-mapping alignment file
   $self->{"halfmapping_file"} = $outfile;
 
   return if (-z $realignment_file || !(-e $realignment_file));
   
-  print "Filtering alignments...\n";
+  print "Filtering using simulated pair alignment...\n";
 
   my $ifh1 = IO::File->new( $realignment_file, 'r' ) or die "$0: Can't open $realignment_file: $!";
   my $ifh2 = IO::File->new( $infile, 'r' ) or die "$0: Can't open $infile: $!";
@@ -980,27 +980,25 @@ sub filter1 {
   # Get an alignment from the originally half-mapping pairs
   while ( my $line = $ifh2->getline ) {
     next if $line =~ m/^@/;
-    my @fields = split( /\t/, $line );
-    my ($orig_id, $orig_flags, $other_mate_pos, $seq) = ($fields[0], $fields[1], $fields[7], $fields[9]);
+    my @f = split( /\t/, $line );
+    my ($orig_id, $orig_flags, $other_mate_chr, $other_mate_pos, $seq) = ($f[0], $f[1], $f[2], $f[7], $f[9]);
     
     # Consider only the unaligned mate from the half-mapping read pair
     next if !&_isUnalignedMate($orig_flags);
     $read_count++;
     
-    # Determine the fragment length for this individual read
-    my $frag_length = length($seq);
-    
     # Get the corresponding alignment from the simulated pairs
     my $sim_line;
     while ( $sim_line = $ifh1->getline ) {
       next if $sim_line =~ m/^@/;
-      my @fields = split( /\t/, $sim_line );
-      my ($id, $pos) = ($fields[0], $fields[3]);
+      my @f = split( /\t/, $sim_line );
+      my $id = $f[0];
       while ( $id ne $orig_id ) {
         $sim_line  = $ifh1->getline;
-        my @fields = split( /\t/, $sim_line );
-        ($id, $pos) = ($fields[0], $fields[3]);
+        @f = split( /\t/, $sim_line );
+        $id = $f[0];
       }
+      my ($chr, $pos) = ($f[2], $f[3]);
 
       print $ofh2 "Original half-mapping pair unaligned mate: $line" if DEBUG;
       print $ofh2 "Simulated pair alignment line 1: $sim_line"       if DEBUG;
@@ -1016,8 +1014,8 @@ sub filter1 {
       }
 
       # Discard simulated pairs that align close to the originally aligning mate in the half-mapping read pair      
-      if ( $pos != 0 && $pos < $max_offset && $pos > $min_offset ) {
-        print $ofh2 "DISCARDED because $pos between $min_offset and $max_offset\n\n" if DEBUG;
+      if ( $chr eq $other_mate_chr && $pos != 0 && $pos < $max_offset && $pos > $min_offset ) {
+        print $ofh2 "DISCARDED because $pos between $min_offset and $max_offset, and $chr=$other_mate_chr\n\n" if DEBUG;
         $discard_count++;
         last;
       }
@@ -1026,7 +1024,7 @@ sub filter1 {
       if ($pos == 0) {
         print $ofh2 "RETAINED because unaligned\n\n" if DEBUG;
       } else {
-        print $ofh2 "RETAINED: other_mate_pos = $other_mate_pos; pos is $pos, which is not between $min_offset and $max_offset\n\n" if DEBUG;
+        print $ofh2 "RETAINED: other_mate_pos = $other_mate_pos; pos is $pos, which is not between $min_offset and $max_offset, or $chr!=$other_mate_chr\n\n" if DEBUG;
       }
 
       # Keep this mate
@@ -1039,6 +1037,155 @@ sub filter1 {
   $ofh1->close;
   $ofh2->close if DEBUG;
   print "Discarded $discard_count mates out of $read_count\n";
+}
+
+
+=head2 filter2
+
+ Title   : filter2
+ Usage   : 
+ Function:
+ Example : 
+ Returns : 
+ Args    : 
+
+=cut
+
+sub filter2 {
+  my $self                = shift;
+  my $tolerance           = shift;
+  my $work_dir            = $self->{"work_dir"};
+  my $index_dir           = $self->{"index_dir"};
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $reads_basename      = $self->{"reads"}->{"basename"};
+  my $frag_length         = $self->{"frag_length"};  
+  my $index               = "$index_dir/${ref_genome_basename}";
+  my $halfmap_file        = $self->{"halfmapping_file"};
+  my $infasta             = "$work_dir/${reads_basename}_blast_input.fa";
+  my $blastfile           = "$work_dir/${reads_basename}_halfm_unal_mates.blast";
+  my $errfile             = "$work_dir/${reads_basename}_halfm_unal_mates.blast.err";
+  my $hitfile             = "$work_dir/${reads_basename}_halfm_unal_mates_to_remove.txt";
+  my $hitfile_sorted      = "$work_dir/${reads_basename}_halfm_unal_mates_to_remove_sorted.txt";
+  my $debug_file          = "$work_dir/${reads_basename}_halfm_unal_mates_to_remove.debug" if DEBUG;
+  my $outfile             = "$work_dir/${reads_basename}_filtered2.sam";
+  
+  return if (-z $halfmap_file || !(-e $halfmap_file));
+  print "Filtering using Blast...\n";
+  
+  # Convert SAM to Fasta for Blast
+  capture( "sam2fasta.pl -i $halfmap_file > $infasta" );
+  die "$0: sam2fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
+
+  unless ( -e "$index_dir/$ref_genome_basename.nhr"
+    && "$index_dir/$ref_genome_basename.nin"
+    && "$index_dir/$ref_genome_basename.nsq" )
+  {
+    &build_blast_index($self);
+  }
+  
+  # Call Blast to run the mapping
+  capture( "blastall -m 8 -i $infasta -d $index -p blastn -r 2 -G 2 -E 2 -e0.00001 -b1 " .
+           "> $blastfile 2> $errfile" );
+  die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
+  
+  # Parse Blast output
+  my $last_id = "";
+  my $mapped_count = 0;
+  my $ifh = IO::File->new( $blastfile, 'r' ) or die "$0: Can't open $blastfile: $!";
+  my $ofh = IO::File->new( $hitfile, 'w' ) or die "$0: Can't open $hitfile: $!";
+  my $ofh2 = IO::File->new( $debug_file, 'w' ) or die "$0: Can't open $debug_file: $!" if DEBUG;
+  while ( my $line = $ifh->getline ) {
+    # Retrieve the first match per ID
+    my @f = split( /\t/, $line );
+    my ($id, $chr, $qstart, $qend, $sstart, $send) = ($f[0], $f[1], $f[6], $f[7], $f[8], $f[9]);
+    next if ($id eq $last_id);
+    $last_id = $id;
+    my ($qid, $qflags, $qchr, $qpos, $qlen) = split( ',', $id);
+    
+    # Look for matches within 5 of the ends, on the same chromosome
+    next if ($chr ne $qchr || $qstart > 5 || $qend < ($qlen - 5));
+    
+    # Check orientation and position
+    my ($max_offset, $min_offset);
+    my $strand = 0;
+    $strand = 1 if (($send - $sstart) > 0);
+    if ( !&_isOtherMateAlignedToReverseStrand($qflags)) {
+      # Other mate aligns to forward strand; this mate should align to reverse strand
+      if (($send - $sstart) > 0) {
+        #print $ofh2 "strand mismatch\n\n" if DEBUG;
+        next;
+      }
+      $min_offset = $qpos - $frag_length - $tolerance;
+      $max_offset = $qpos - $frag_length + $tolerance;     
+      if ($sstart <= $max_offset && $sstart >= $min_offset) {
+        print $ofh2 "SUCCESSFULLY MAPPED: " if DEBUG;
+        print $ofh "$qid\n";
+        $mapped_count++;
+      }
+      print $ofh2 "QID=$qid QFLAGS=$qflags QCHR=$qchr QPOS=$qpos QLEN=$qlen QSTART=$qstart QEND=$qend " if DEBUG;
+      print $ofh2 "aligned from SSTART=$sstart to SEND=$send, " if DEBUG;
+      print $ofh2 "on reverse strand, window is MIN_OFFSET=$min_offset to MAX_OFFSET=$max_offset\n\n" if DEBUG;
+    } else {
+      # Other mate aligns to reverse strand; this mate should align to forward strand
+      if (($send - $sstart) < 0) {
+        #print $ofh2 "strand mismatch\n\n" if DEBUG;
+        next;
+      }   
+      $min_offset = $qpos + $frag_length - $tolerance;
+      $max_offset = $qpos + $frag_length + $tolerance;
+      if ($sstart <= $max_offset && $sstart >= $min_offset) {
+        print $ofh2 "SUCCESSFULLY MAPPED: " if DEBUG;
+        print $ofh "$qid\n";
+        $mapped_count++;
+      }
+      print $ofh2 "QID=$qid QFLAGS=$qflags QCHR=$qchr QPOS=$qpos QLEN=$qlen QSTART=$qstart QEND=$qend " if DEBUG;
+      print $ofh2 "aligned from SSTART=$sstart to SEND=$send, " if DEBUG;
+      print $ofh2 "on forward strand, window is MIN_OFFSET=$min_offset, MAX_OFFSET=$max_offset\n\n" if DEBUG;
+    }
+  }
+  $ifh->close;
+  $ofh->close;
+  $ofh2->close if DEBUG;
+
+  # If we're not removing any mates, stop here
+  if (-z $hitfile) {
+    print "No mates discarded\n";
+    return;
+  }
+  
+  # Sort the list of successfully mapped IDs
+  capture( "sort -V -k1,1 -o $hitfile_sorted $hitfile" );
+  die "$0: sort exited unsuccessful" if ( $EXITVAL != 0 ); 
+  
+  # Remove mapped IDs from half-mapping list
+  $ifh = IO::File->new( $hitfile_sorted, 'r' ) or die "$0: Can't open $hitfile_sorted: $!";
+  my $ifh2 = IO::File->new( $halfmap_file, 'r' ) or die "$0: Can't open $halfmap_file: $!";
+  $ofh = IO::File->new( $outfile, 'w' ) or die "$0: Can't open $outfile: $!";
+  while ( my $line = $ifh->getline ) {
+    $line =~ s/^\s+|\s+$//g; # Remove leading/trailing whitespace
+    next if $line =~ m/^@/;
+    my $id = "";
+    while ($line ne $id) {
+      my $orig_line = $ifh2->getline;
+      my @f = split( /\t/, $orig_line );
+      $id = $f[0];
+      if ($line eq $id) {
+        next;
+      } else {
+        print $ofh $orig_line;
+      }
+    }
+    
+  }
+  $ifh->close;
+  $ifh2->close;
+  $ofh->close;
+  
+  # Print statistics about how many half-mapping read pairs were removed
+  print "Discarded $mapped_count mates\n";
+  
+  # Save the filtered results in the place of the half-mapping alignment file
+  $self->{"halfmapping_file"} = $outfile;
 }
 
 =head2 assemble_groups
@@ -1408,8 +1555,8 @@ sub _isInNonMappingPair {
 # Discordant alignments are those in which the mates overlap, or both mates map to the same strand
 sub _isInDiscordantPair {
   my $flags = int(shift);
-  return ( ($flags == 65 || $flags == 81 || $flags == 97 || $flags == 113 || $flags == 117 ||
-            $flags == 129 || $flags == 145 || $flags == 161 || $flags == 177 || $flags == 181) );
+  return ( ($flags == 65 || $flags == 81 || $flags == 97 || $flags == 113 || 
+            $flags == 129 || $flags == 145 || $flags == 161 || $flags == 177) );
 }
 
 # Returns 1 if the given sum-of-flags values represent a pair that aligns discordantly, otherwise returns 0
@@ -1421,13 +1568,17 @@ sub _isDiscordantPair {
 }
 
 # Returns 1 if the given sum-of-flags values represent a half-mapping read pair, otherwise returns 0
+# Bowtie 2 and BWA differ on whether they set the 16 (0x10) flag in two half-mapping cases (looks like a bug in BWA)
 sub _isHalfMappingPair {
   my $flags1 = int(shift);
   my $flags2 = int(shift);
-  return ( ($flags1 == 69 && $flags2 == 137)
-        || ($flags1 == 73 && $flags2 == 133)
-        || ($flags1 == 89 && $flags2 == 165)
-        || ($flags1 == 101 && $flags2 == 153) );
+  return ( ($flags1 == 69 && $flags2 == 137) || ($flags1 == 137 && $flags2 == 69)   # Bowtie 2/BWA
+        || ($flags1 == 73 && $flags2 == 133) || ($flags1 == 133 && $flags2 == 73)   # Bowtie 2/BWA
+        || ($flags1 == 89 && $flags2 == 165) || ($flags1 == 165 && $flags2 == 89)   # Bowtie 2
+        || ($flags1 == 101 && $flags2 == 153) || ($flags1 == 153 && $flags2 == 101) # Bowtie 2
+        || ($flags1 == 89 && $flags2 == 181) || ($flags1 == 181 && $flags2 == 89)   # BWA
+        || ($flags1 = 117 && $flags2 == 153) || ($flags1 == 153 && $flags2 == 117)  # BWA
+         ); 
 }
 
 # Returns 1 if the given sum-of-flags values represent a read pair containing mates that align independently but

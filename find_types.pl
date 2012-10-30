@@ -52,9 +52,9 @@ while ( my $line1 = $ifh->getline ) {
   
   # Check for discordant pairs first, because they may also match other categories
   if (IntronPoly::_isDiscordantPair($flags1, $flags2)) { $disc++; $flags_disc{"$flags1,$flags2"}++; } 
+  elsif (IntronPoly::_isHalfMappingPair($flags1, $flags2)) { $half++; $flags_half{"$flags1,$flags2"}++; }
   elsif (IntronPoly::_isInMappingPair($flags1)) { $full++; $flags_full{"$flags1,$flags2"}++; }
   elsif (IntronPoly::_isInNonMappingPair($flags1)) { $non++; $flags_non{"$flags1,$flags2"}++; }
-  elsif (IntronPoly::_isHalfMappingPair($flags1, $flags2)) { $half++; $flags_half{"$flags1,$flags2"}++; }
   else { print "not categorized: $flags1, $flags2\n"; }
 }
 $ifh->close;

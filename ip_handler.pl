@@ -38,7 +38,7 @@ my $usage_msg = "Usage:\n"
   . "    -m/--max-intron-length        <int>        [ default: 250       ]\n"
   . "    -I/--minins                   <int>        [ default: 0         ]\n"
   . "    -X/--maxins                   <int>        [ default: 3000      ]\n"
-  . "    -t/--tolerance                <int>        [ default: 10        ]\n"
+  . "    -t/--tolerance                <int>        [ default: 5         ]\n"
   . "    -p/--num-threads              <int>        [ default: all cores ]\n"
   . "    --bowtie1\n"
   . "    --validate-reads\n"
@@ -105,7 +105,7 @@ $min_contig_length = $min_contig_length || 70;
 $intron_length = $intron_length || 250;
 $minins = $minins || 0;
 $maxins = $maxins || 3000;
-$tolerance = $tolerance || 10;
+$tolerance = $tolerance || 5;
 $num_threads = $num_threads || Sys::CPU::cpu_count();
 $skip_to = $skip_to || "";
 $bowtie1 = $bowtie1 || 0;
@@ -169,21 +169,18 @@ $project->build_bwa_index( $index_dir );
 $project->run_bwa_mapping();
 
 #COLLECTION:
-#$project->build_bowtie_index( $index_dir );
 #$project->bowtie_identify( $existing_alignment_file );
 $project->bwa_identify();
 
 #FILTERING:
-$project->build_bowtie_index( $index_dir );
 $project->set_fragment_length( $fragment_length );
 $project->create_simulated_pairs();
 #$project->align_simulated_pairs_bowtie( $num_threads, $minins, $maxins );
 $project->align_simulated_pairs_bwa();
 $project->filter1( $tolerance );
-exit;
+$project->filter2( $tolerance );
 
 #ASSEMBLY:
-$project->set_fragment_length( $fragment_length );
 $project->assemble_groups( $intron_length, $min_mates, $min_contig_length );
 
 #ALIGNMENT:

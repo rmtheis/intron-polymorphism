@@ -33,9 +33,9 @@ $input_file =~ s/^~/$ENV{HOME}/;
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
 while ( my $line = $ifh->getline ) {
   next if $line =~ m/^@/;
-  my @fields = split(/\t/, $line);
-  my ( $id, $seq ) = ( $fields[0], $fields[9] );
-  print ">$id\n";
+  my @f = split(/\t/, $line);
+  my ( $id, $flags, $chr, $pos, $seq ) = ( $f[0], $f[1], $f[2], $f[3], $f[9] );
+  print ">${id},${flags},${chr},${pos}," . length($seq) . "\n";
   print "$seq\n";
 }
 $ifh->close;
