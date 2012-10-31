@@ -16,6 +16,7 @@
 
 use strict;
 use Getopt::Long;
+use IntronPoly;
 use IO::File;
 
 #
@@ -25,8 +26,11 @@ use IO::File;
 my $usage_msg = "Prints a SAM file to a Fasta file.\n"
               . "Usage: sam2fasta.pl -i sam_file > output.fa\n";
 die $usage_msg unless ( @ARGV );
-my $input_file;
-GetOptions( "i=s" =>\$input_file ) || die "$0: Bad option";
+my ($input_file, $reverse);
+GetOptions(
+           "i=s" =>\$input_file,
+           "rev" =>\$reverse, # Reverse-complement some mates
+           ) || die "$0: Bad option";
 die $usage_msg unless ( defined $input_file );
 $input_file =~ s/^~/$ENV{HOME}/;
 
@@ -35,6 +39,12 @@ while ( my $line = $ifh->getline ) {
   next if $line =~ m/^@/;
   my @f = split(/\t/, $line);
   my ( $id, $flags, $chr, $pos, $seq ) = ( $f[0], $f[1], $f[2], $f[3], $f[9] );
+  
+  # Accommodate BWA's reverse-complemented sequences for unmapped mates on forward strand
+  if ($reverse && IntronPoly::_isOtherMateAlignedToReverseStrand($flags)) {
+      $seq = IntronPoly::_reverseComplement($seq);
+  }
+  
   print ">${id},${flags},${chr},${pos}," . length($seq) . "\n";
   print "$seq\n";
 }

@@ -1074,7 +1074,7 @@ sub filter2 {
   print "Filtering using Blast...\n";
   
   # Convert SAM to Fasta for Blast
-  capture( "${scripts_dir}sam2fasta.pl -i $halfmap_file > $infasta" );
+  capture( "${scripts_dir}sam2fasta.pl --rev -i $halfmap_file > $infasta" );
   die "$0: sam2fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   unless ( -e "$index_dir/$ref_genome_basename.nhr"
@@ -1116,32 +1116,32 @@ sub filter2 {
         #print $ofh2 "strand mismatch\n\n" if DEBUG;
         next;
       }
-      $min_offset = $qpos - $frag_length - $tolerance;
-      $max_offset = $qpos - $frag_length + $tolerance;     
-      if ($sstart <= $max_offset && $sstart >= $min_offset) {
+      $min_offset = $qpos + $frag_length - $tolerance;
+      $max_offset = $qpos + $frag_length + $tolerance;     
+      if ($send <= $max_offset && $send >= $min_offset) {
         print $ofh2 "SUCCESSFULLY MAPPED: " if DEBUG;
         print $ofh "$qid\n";
         $mapped_count++;
       }
-      print $ofh2 "QID=$qid QFLAGS=$qflags QCHR=$qchr QPOS=$qpos QLEN=$qlen QSTART=$qstart QEND=$qend " if DEBUG;
-      print $ofh2 "aligned from SSTART=$sstart to SEND=$send, " if DEBUG;
-      print $ofh2 "on reverse strand, window is MIN_OFFSET=$min_offset to MAX_OFFSET=$max_offset\n\n" if DEBUG;
+      print $ofh2 "$qid $qflags $qchr $qlen $qstart $qend QPOS=$qpos " if DEBUG;
+      print $ofh2 "aligned SSTART=$sstart to SEND=$send (on reverse strand), " if DEBUG;
+      print $ofh2 "window is MIN_OFFSET=$min_offset to MAX_OFFSET=$max_offset\n\n" if DEBUG;
     } else {
       # Other mate aligns to reverse strand; this mate should align to forward strand
       if (($send - $sstart) < 0) {
         #print $ofh2 "strand mismatch\n\n" if DEBUG;
         next;
       }   
-      $min_offset = $qpos + $frag_length - $tolerance;
-      $max_offset = $qpos + $frag_length + $tolerance;
+      $min_offset = $qpos - $frag_length - $tolerance;
+      $max_offset = $qpos - $frag_length + $tolerance;
       if ($sstart <= $max_offset && $sstart >= $min_offset) {
         print $ofh2 "SUCCESSFULLY MAPPED: " if DEBUG;
         print $ofh "$qid\n";
         $mapped_count++;
       }
-      print $ofh2 "QID=$qid QFLAGS=$qflags QCHR=$qchr QPOS=$qpos QLEN=$qlen QSTART=$qstart QEND=$qend " if DEBUG;
-      print $ofh2 "aligned from SSTART=$sstart to SEND=$send, " if DEBUG;
-      print $ofh2 "on forward strand, window is MIN_OFFSET=$min_offset, MAX_OFFSET=$max_offset\n\n" if DEBUG;
+      print $ofh2 "$qid $qflags $qchr $qlen $qstart $qend QPOS=$qpos " if DEBUG;
+      print $ofh2 "aligned SSTART=$sstart to SEND=$send (on forward strand), " if DEBUG;
+      print $ofh2 "window is MIN_OFFSET=$min_offset, MAX_OFFSET=$max_offset\n\n" if DEBUG;
     }
   }
   $ifh->close;

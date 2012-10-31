@@ -178,7 +178,7 @@ $project->create_simulated_pairs();
 #$project->align_simulated_pairs_bowtie( $num_threads, $minins, $maxins );
 $project->align_simulated_pairs_bwa();
 $project->filter1( $tolerance );
-$project->filter2( $tolerance );
+$project->filter2( 100 );
 
 #ASSEMBLY:
 $project->assemble_groups( $intron_length, $min_mates, $min_contig_length );
