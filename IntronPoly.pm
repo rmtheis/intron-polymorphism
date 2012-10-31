@@ -446,7 +446,7 @@ sub run_bwa_mapping {
   # Call BWA to run the mapping
   print "Mapping using BWA...\n";
   my $ref = "$index_dir/$ref_genome_basename$ref_genome_extension";
-  capture("bwa sampe $ref $index_dir/$sai1 $index_dir/$sai2 $mate1s $mate2s > $initial_align_file " .
+  capture("bwa sampe -s $ref $index_dir/$sai1 $index_dir/$sai2 $mate1s $mate2s > $initial_align_file " .
           "2> $work_dir/${reads_basename}_bwa_initial_mapping_stats.txt"
   );
   die "$0: BWA exited unsuccessful" if ( $EXITVAL != 0 );
@@ -925,7 +925,7 @@ sub align_simulated_pairs_bwa {
   die "$0: bwa aln exited unsuccessful" if ( $EXITVAL != 0 );
   
   # Align the simulated pairs to the reference genome
-  capture("bwa sampe $copied_genome $sai1 $sai2 $pairs_file_1 $pairs_file_2 > $unsorted_outfile " .
+  capture("bwa sampe -s $copied_genome $sai1 $sai2 $pairs_file_1 $pairs_file_2 > $unsorted_outfile " .
           "2> $work_dir/${reads_basename}_bwa_sim_pairs_mapping_stats.txt"
   );
   die "$0: BWA exited unsuccessful" if ( $EXITVAL != 0 );
@@ -1056,6 +1056,7 @@ sub filter2 {
   my $tolerance           = shift;
   my $work_dir            = $self->{"work_dir"};
   my $index_dir           = $self->{"index_dir"};
+  my $scripts_dir         = $self->{"scripts_dir"};
   my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
   my $reads_basename      = $self->{"reads"}->{"basename"};
   my $frag_length         = $self->{"frag_length"};  
@@ -1073,7 +1074,7 @@ sub filter2 {
   print "Filtering using Blast...\n";
   
   # Convert SAM to Fasta for Blast
-  capture( "sam2fasta.pl -i $halfmap_file > $infasta" );
+  capture( "${scripts_dir}sam2fasta.pl -i $halfmap_file > $infasta" );
   die "$0: sam2fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
   unless ( -e "$index_dir/$ref_genome_basename.nhr"
