@@ -98,7 +98,7 @@ sub set_work_dir {
  Usage   : $project->build_db( "path_to_reference_genome", "read_pairs_base_name" )
  Function: Sets references to data files used in multiple steps in the pipeline
  Example : my $ref_genome = "/home/theis/genome/mygenome.fna";
-           $project->build_db( $ref_genome, "reads" );
+           $project->build_db( $ref_genome, "reads_1.fq", "reads_2.fq" );
  Returns : No return value
  Args    : Scalar of full path to the reference genome Fasta file, scalar of the FastQ
            file containing mate 1s, and scalar of the FastQ file containing mate 2s
@@ -158,13 +158,9 @@ sub set_bowtie_version {
  Usage   : $project->mapping_setup( "index_dir", "reads_dir", "read_pairs_base_name")
  Function: Sets references to data files used for mapping reads to the reference genome, and validates
            input files
- Example : my $index_dir = "/home/theis/bt2/";
-           my $reads_dir = "/home/theis/reads/";
-           $project->mapping_setup( $index_dir, $reads_dir, "reads" );
+ Example : $project->mapping_setup( "/tmp" );
  Returns : No return value
- Args    : Scalar full path to the Bowtie executable directory, scalar full path to the Bowtie
-           index directory, scalar full path to the directory containing the Fastq read pairs files,
-           scalar of the base name of the read pairs files (filename without "_1.fq" or "_2.fq" ending),
+ Args    : Scalar full path to the index directory for the alignment program (BWA or Bowtie 1/2),
            flag indicating whether to validate the reads file (optional)
 
 =cut
@@ -269,13 +265,24 @@ sub build_bowtie_index {
   }
 }
 
+=head2 build_bwa_index
+
+ Title   : build_bwa_index
+ Usage   : $project->build_bwa_index();
+ Function: Runs BWA indexing to create a BWA index from the reference genome
+ Example : $project->mapping_setup( $index_dir );
+           $project->build_bwa_index();
+ Returns : No return value
+ Args    : Directory containing BWA index files (optional)
+
+=cut
+
 sub build_bwa_index {
   my $self                 = shift;
   my $index_dir            = shift || $self->{"index_dir"};
   my $ref_genome           = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename  = $self->{"ref_genome"}->{"basename"};
   my $ref_genome_extension = $self->{"ref_genome"}->{"extension"};
-  my $bowtie_version       = $self->{"bowtie_version"};
   $self->{"index_dir"}     = $index_dir;
   my $mate1s               = $self->{"reads"}->{"mate1s"};
   my $mate2s               = $self->{"reads"}->{"mate2s"};
@@ -416,11 +423,13 @@ sub run_bowtie_mapping {
 =head2 run_bwa_mapping
 
  Title   : run_bwa_mapping
- Usage   : 
- Function: 
- Example : 
- Returns : 
- Args    : 
+ Usage   : $project->run_bwa_mapping( num_threads, minins, maxins )
+ Function: Aligns reads to the reference genome and saves output file
+ Example : $project->mapping_setup( $index_dir );
+           $project->build_bwa_index( $index_dir );
+           $project->run_bwa_mapping();
+ Returns : No return value
+ Args    : None
 
 =cut
 
@@ -475,8 +484,8 @@ sub run_bwa_mapping {
  Title   : bowtie_identify
  Usage   : $project->bowtie_identify()
  Function: Identifies half-mapping read pairs from the read alignment output file
- Example : $project->build_bowtie_index();
-           $project->mapping_setup( $index_dir, $reads_dir, "reads" );
+ Example : $project->mapping_setup( $index_dir );
+           $project->build_bowtie_index();
            $project->bowtie_identify();
  Returns : No return value
  Args    : Scalar path to alignment file to use (optional)
@@ -654,11 +663,13 @@ sub bowtie_identify {
 =head2 bwa_identify
 
  Title   : bwa_identify
- Usage   : 
- Function: 
- Example : 
- Returns : 
- Args    : 
+ Usage   : $project->bwa_identify()
+ Function: Identifies half-mapping read pairs from the read alignment output file
+ Example : $project->mapping_setup( $index_dir );
+           $project->build_bwa_index( $index_dir );
+           $project->bwa_identify();
+ Returns : No return value
+ Args    : Scalar path to alignment file to use (optional)
 
 =cut
 
@@ -750,8 +761,8 @@ sub set_fragment_length {
  Usage   : $project->create_simulated_pairs()
  Function: Create simulated paired-end reads from the outer portions of non-aligning mate sequences,
            using the half-mapping read pairs as a starting point
- Example : $project->run_bowtie_mapping( 8, 100, 500 );
-           $project->bowtie_identify();
+ Example : $project->run_bwa_mapping();
+           $project->bwa_identify();
            $project->create_simulated_pairs();
  Returns : No return value
  Args    : Scalar path to SAM format alignment file (optional), scalar path to SAM half-mapping
@@ -886,11 +897,12 @@ sub align_simulated_pairs_bowtie {
 =head2 align_simulated_pairs_bwa
 
  Title   : align_simulated_pairs_bwa
- Usage   : 
- Function: 
- Example : 
- Returns : 
- Args    : 
+ Usage   : $project->align_simulated_pairs_bwa( $num_threads )
+ Function: Aligns simulated read pairs to the reference genome using BWA.
+ Example : $project->bwa_identify();
+           $project->align_simulated_pairs_bwa();
+ Returns : No return value
+ Args    : None
 
 =cut
 
@@ -942,12 +954,12 @@ sub align_simulated_pairs_bwa {
  Usage   : $project->filter1();
  Function: Creates a filtered list of alignments, removing half-mapping read pairs whose unaligned
            mates were successfully aligned to the reference genome as a simulated paired-end read
- Example : $project->bowtie_identify();
-           $project->align_simulated_pairs( 8 );
-           $project->filter1();
+ Example : $project->bwa_identify();
+           $project->align_simulated_pairs_bwa();
+           $project->filter1( 5 );
  Returns : No return value
  Args    : Alignment tolerance, path to file containing original half-mapping reads (optional),
-           path to file containing alignments from alignment of simulated paired-end reads
+           path to file containing alignments for simulated paired-end reads
 
 =cut
 
@@ -1043,11 +1055,16 @@ sub filter1 {
 =head2 filter2
 
  Title   : filter2
- Usage   : 
- Function:
- Example : 
- Returns : 
- Args    : 
+ Usage   : $project->filter2();
+ Function: Creates a filtered list of alignments, removing half-mapping read pairs whose unaligned
+           mates were successfully aligned to the reference genome meeting specific criteria
+           using Blast
+ Example : $project->bwa_identify();
+           $project->align_simulated_pairs_bwa();
+           $project->filter1( 5 );
+           $project->filter2( 500 );
+ Returns : No return value
+ Args    : Alignment tolerance
 
 =cut
 
@@ -1196,7 +1213,7 @@ sub filter2 {
  Function: Identifies groups of half-mapping read pairs that align to the reference genome at
            locations near one another, and performs a local assembly on the unaligned mates in each
            group using Taipan
- Example : $project->bowtie_identify();
+ Example : $project->bwa_identify();
            $project->filter( 8 );
            $project->assemble_groups( 250, 3, 16 );
  Returns : No return value
@@ -1407,7 +1424,7 @@ sub build_blast_index() {
  Title   : align_groups_blast
  Usage   : $project->align_groups_blast()
  Function: Aligns contigs assembled from half-mapping reads
- Example : $project->bowtie_identify();
+ Example : $project->bwa_identify();
            $project->filter( 8 );
            $project->assemble_groups( 250, 3 );
            $project->align_groups_blast();
@@ -1443,7 +1460,7 @@ sub align_groups_blast() {
  Title   : align_groups_clustal
  Usage   : $project->align_groups_clustal()
  Function: Aligns contigs assembled from half-mapping reads
- Example : $project->bowtie_identify();
+ Example : $project->bwa_identify();
            $project->filter( 8 );
            $project->assemble_groups( 250, 3 );
            $project->align_groups_clustal();
