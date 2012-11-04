@@ -1424,6 +1424,7 @@ sub align_groups_blast() {
   my $reads_basename                = $self->{"reads"}->{"basename"};
   my $ref_genome_basename           = $self->{"ref_genome"}->{"basename"};
   my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned.blast";
+  my $err_file                      = "$work_dir/${reads_basename}_contigs_aligned.err";
   my $index                         = "$index_dir/${ref_genome_basename}";
   $self->{"contigs_alignment_file"} = $output_file;
 
@@ -1431,7 +1432,7 @@ sub align_groups_blast() {
   print "Aligning assembled contigs to reference genome using Blast...\n";
   
   # Call Blast to run the mapping
-  capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file -e 1e-5" );
+  capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file -e 1e-5 2> $err_file" );
   die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
   
   print "Alignment results saved.\n";
