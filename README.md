@@ -7,7 +7,7 @@ Discovers intron insertions and deletions from samples of closely related organi
 
 The following packages must be installed and added to your PATH:
 
-1. [Bowtie 2](http://bowtie-bio.sourceforge.net/bowtie2/)
+1. [BWA](http://bio-bwa.sourceforge.net/)
 
 2. [Blast](http://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Web&PAGE_TYPE=BlastDocs&DOC_TYPE=Download)
 
@@ -16,10 +16,9 @@ The following packages must be installed and added to your PATH:
 ## INSTALLATION
 **_Linux (64-bit)_**
 
-Install required Perl modules:
+Install required Perl module:
 
     sudo cpan IPC::System::Simple
-    sudo cpan Sys::CPU
 
 Install project code:
 
@@ -45,21 +44,13 @@ Required Arguments:
     -2/--mate2-file              <string>
 
 Options:
-    -o/--output-dir               <string>     [ default: ./ip_out  ]
+    -o/--output-dir               <string>     [ default: ip_out    ]
     -f/--fragment-length          <int>        [ default: detect    ]
     -a/--min-mates                <int>        [ default: 3         ]
     -l/--min-contig-length        <int>        [ default: 70        ]
     -m/--max-intron-length        <int>        [ default: 250       ]
-    -I/--minins                   <int>        [ default: 0         ]
-    -X/--maxins                   <int>        [ default: 3000      ]
-    -t/--tolerance                <int>        [ default: 10        ]
-    -p/--num-threads              <int>        [ default: all cores ]
-    -s/--skip-to                  <C,F,A,L>
-    -b/--existing-bwt-index-dir   <string>
-    -w/--existing-align-file      <string>
-    -e/--existing-halfmap-file    <string>
-    -c/--existing-contigs-file    <string>
-    --bowtie1
+    -t/--tolerance-simpair        <int>        [ default: 10        ]
+    -r/--tolerance-blast          <int>        [ default: 500       ]
     --validate-reads
     --version
 ```

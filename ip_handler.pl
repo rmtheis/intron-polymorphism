@@ -31,16 +31,13 @@ my $usage_msg = "Usage:\n"
   . "    -2/--mate2-file              <string>\n"
   . "\n"
   . "Options:\n"
-  . "    -o/--output-dir               <string>     [ default: ./ip_out  ]\n"
+  . "    -o/--output-dir               <string>     [ default: ip_out    ]\n"
   . "    -f/--fragment-length          <int>        [ default: detect    ]\n"
   . "    -a/--min-mates                <int>        [ default: 3         ]\n"
   . "    -l/--min-contig-length        <int>        [ default: 70        ]\n"
   . "    -m/--max-intron-length        <int>        [ default: 250       ]\n"
-  . "    -I/--minins                   <int>        [ default: 0         ]\n"
-  . "    -X/--maxins                   <int>        [ default: 3000      ]\n"
-  . "    -t/--tolerance                <int>        [ default: 5         ]\n"
-  . "    -p/--num-threads              <int>        [ default: all cores ]\n"
-  . "    --bowtie1\n"
+  . "    -t/--tolerance-simpair        <int>        [ default: 5         ]\n"
+  . "    -r/--tolerance-blast          <int>        [ default: 500       ]\n"
   . "    --validate-reads\n"
   . "    --version\n";
 
@@ -52,18 +49,14 @@ my $ref_genome_file = undef;            # Reference genome (FastA format)
 my $mate1s = undef;                     # File containing mate 1s in FastQ format
 my $mate2s = undef;                     # File containing mate 2s in FastQ format
 my $output_dir = undef;                 # Directory to put output files in
-my $output_file = undef;                # Filename to save alignment to; for Galaxy
+my $output_file = undef;                # Filename to save contig alignment to; Used by Galaxy
 my $fragment_length = undef;            # Outer distance between mates
 my $min_mates = undef;                  # Minimum number of nearby half-mapping mates for local assembly
 my $min_contig_length;                  # Minimum contig length for local assembly
 my $intron_length = undef;              # Expected intron length for assembly
-my $minins = undef;                     # Bowtie -I/--minins <int> value
-my $maxins = undef;                     # Bowtie -X/--maxins <int> value
-my $tolerance = undef;                  # Alignment position +/- tolerance for simulated pairs
-my $num_threads = undef;                # Number of parallel search threads to use for alignment
-my $skip_to = undef;                    # Pipeline step to skip ahead to
-my $index_dir = undef;                  # Directory containing index files for Bowtie/Blast
-my $bowtie1 = undef;                    # Flag to use Bowtie 1 instead of Bowtie 2
+my $tolerance-simpair = undef;          # Alignment position +/- tolerance for simulated pairs
+my $tolerance-blast = undef;            # Alignment position +/- tolerance for Blast-aligned pairs
+my $index_dir = undef;                  # Directory containing index files for BWA/Blast
 my $validate_reads;                     # Flag indicating whether to validate Fastq reads file
 my $version;                            # Flag to print version number and exit
 my $help;                               # Flag to print usage message and exit
@@ -78,17 +71,13 @@ GetOptions(
   "1|mate1-file=s" => \$mate1s,
   "2|mate2-file=s" => \$mate2s,
   "o|output-dir:s" => \$output_dir,
-  "u|output-file:s" => \$output_file,
+  "u|output-file:s" -> \$output_file,
   "f|fragment-length:i" => \$fragment_length,
   "a|min-mates:i" => \$min_mates,
   "l|min-contig-length:s" => \$min_contig_length,
   "m|max-intron-length:i" => \$intron_length,
-  "X|maxins:i" => \$maxins,
-  "I|minins:i" => \$minins,
-  "t|tolerance:s" => \$tolerance,
-  "p|num-threads:s" => \$num_threads,
-  "s|skip-to:s" => \$skip_to,
-  "bowtie1" => \$bowtie1,
+  "t|tolerance-simpair:s" => \$tolerance-simpair,
+  "r|tolerance-blast:s" => \$tolerance-blast,
   "validate-reads" => \$validate_reads,
   "v|version" => \$version,
   "h|help" => \$help,
@@ -103,13 +92,9 @@ $fragment_length = $fragment_length || -1;
 $min_mates = $min_mates || 3;
 $min_contig_length = $min_contig_length || 70;
 $intron_length = $intron_length || 250;
-$minins = $minins || 0;
-$maxins = $maxins || 3000;
-$tolerance = $tolerance || 5;
-$num_threads = $num_threads || Sys::CPU::cpu_count();
-$skip_to = $skip_to || "";
-$bowtie1 = $bowtie1 || 0;
-$index_dir = $index_dir || "./index";
+$tolerance-simpair = $tolerance-simpair || 5;
+$tolerance-blast = $tolerance-blast || 500;
+$index_dir = $index_dir || "index";
 $validate_reads = $validate_reads || 0;
 
 # Print version number if requested
@@ -144,17 +129,8 @@ $project->build_db(
   $mate2s
 );
 
-# Set the Bowtie version to use
-my $bowtie_version;
-if ($bowtie1) {
-  $bowtie_version = 1;
-} else {
-  $bowtie_version = 2; # Default is Bowtie 2.
-}
-$project->set_bowtie_version( $bowtie_version );
-
 # Ensure required executables are available
-die "bowtie2 not available on PATH" if system("bowtie2 --version >/dev/null 2>/dev/null") != 0;
+die "bwa not available on PATH" if system("which bwa >/dev/null 2>/dev/null") != 0;
 die "taipan not available on PATH" if system("which taipan >/dev/null 2>/dev/null") != 0;
 die "clustalw not available on PATH" if system("which clustalw >/dev/null 2>/dev/null") != 0;
 
@@ -163,29 +139,25 @@ die "clustalw not available on PATH" if system("which clustalw >/dev/null 2>/dev
 ####################
 
 $project->mapping_setup( $index_dir, $validate_reads );
-#$project->build_bowtie_index( $index_dir );
 $project->build_bwa_index( $index_dir );
-#$project->run_bowtie_mapping( $num_threads, $minins, $maxins );
 $project->run_bwa_mapping();
 
 #COLLECTION:
-#$project->bowtie_identify( $existing_alignment_file );
 $project->bwa_identify();
 
 #FILTERING:
 $project->set_fragment_length( $fragment_length );
 $project->create_simulated_pairs();
-#$project->align_simulated_pairs_bowtie( $num_threads, $minins, $maxins );
 $project->align_simulated_pairs_bwa();
-$project->filter1( $tolerance );
-$project->filter2( 100 );
+$project->filter1( $tolerance-simpair );
+$project->filter2( $tolerance-blast );
 
 #ASSEMBLY:
 $project->assemble_groups( $intron_length, $min_mates, $min_contig_length );
 
 #ALIGNMENT:
 $project->build_blast_index( $index_dir );
-$project->align_groups_blast();
+$project->align_groups_blast( $output_file );
 #$project->align_groups_clustal( $output_file );
 
 # Copy latest run to "run-latest" directory for quickly locating the last-run results

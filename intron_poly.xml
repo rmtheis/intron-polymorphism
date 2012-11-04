@@ -1,6 +1,6 @@
 <!-- Galaxy Tool Definition File -->
 <tool id="intron_poly" name="intron-polymorphism" version="0.1">
-  <description>find intron polymorphisms</description>
+  <description>Find intron polymorphisms</description>
   <version_command>ip_handler.pl --version</version_command>
   <command>
     ip_handler.pl 
@@ -11,34 +11,13 @@
       --min-mates $minMates
       --min-contig-length $minContigLength
       --max-intron-length $maxIntronLength
-      --minins $minins
-      --maxins $maxins
+      --tolerance-simpair $toleranceSimpair
+      --tolerance-blast $toleranceBlast
       #if $fragLength.set == 'yes':
         --fragment-length ${fragLength.length}
       #end if
-      #if $threads.set == 'yes':
-        --num-threads ${threads.numThreads}
-      #end if
       #if str($validateReads) == 'true':
         --validate-reads
-      #end if
-      #if $skipTo.step == 'collection':
-        --skipTo C 
-        --existing-align-file ${skipTo.existingAlignmentFile}
-      #end if
-      #if $skipTo.step == 'filtering':
-        --skipTo F
-        --existing-align-file ${skipTo.existingAlignmentFile}
-        --existing-halfmap-file ${skipTo.existingHalfmapFile}
-      #end if
-      #if $skipTo.step == 'assembly':
-        --skipTo A
-        --existing-align-file ${skipTo.existingAlignmentFile}
-        --existing-halfmap-file ${skipTo.existingHalfmapFile}
-      #end if
-      #if $skipTo.step == 'alignment':
-        --skipTo L
-        --existing-contigs-file ${skipTo.existingContigsFile}
       #end if
   </command>
   <inputs>
@@ -61,41 +40,9 @@
 that determines whether mates are close enough together to form a group. (-m)" />
     <param name="minins" type="integer" value="0" label="The minimum fragment length for valid paired-end alignments. This value is passed to Bowtie for the initial mapping. (-I)" />
     <param name="maxins" type="integer" value="3000" label="The maximum fragment length for valid paired-end alignments. This value is passed to Bowtie for the initial mapping. (-X)" />
-    <conditional name="threads">
-      <param name="set" type="select" label="Number of threads (-p)">
-        <option value="no">Run on all available cores (default)</option>
-        <option value="yes">Set number of cores</option>
-      </param>
-      <when value="yes">
-        <param name="numThreads" type="integer" value="4" label="Enter number of cores to use"/>
-      </when>
-      <when value="no" />
-    </conditional>
+    <param name="tolerance-simpair" value="5" label="The tolerance represents the number of base positions behind or forward of the expected alignment position allowed to consider the alignment as acceptable."/>
+    <param name="tolerance-blast" value="500" label="The tolerance with which to consider Blast alignments of unmapped mates as aligned to the reference genome relative to the expected position of the alignment based on the mapped mate in the pair and the insert length."
     <param name="validateReads" type="boolean" truevalue="true" falsevalue="false" checked="no" label="Validate the FASTQ reads files? (--validate-reads)" help="" />
-    <conditional name="skipTo">
-      <param name="step" type="select" label="Run pipeline starting from">
-        <option value="beginning">the beginning</option>
-        <option value="collection">collection</option>
-        <option value="filtering">filtering</option>
-        <option value="assembly">assembly</option>
-        <option value="alignment">alignment</option>
-      </param>
-      <when value="beginning" />
-      <when value="collection">
-      	<param format="sam" name="existingAlignmentFile" type="data" label="SAM alignment file containing initial alignment (-w)" />
-      </when>
-      <when value="filtering">
-      	<param format="sam" name="existingAlignmentFile" type="data" label="SAM alignment file containing initial alignment (-w)" />
-      	<param format="sam" name="existingHalfmapFile" type="data" label="SAM alignment file containing half-mapping reads (-e)" />
-      </when>
-      <when value="assembly">
-      	<param format="sam" name="existingAlignmentFile" type="data" label="SAM alignment file containing initial alignment (-w)" />
-      	<param format="sam" name="existingHalfmapFile" type="data" label="SAM alignment file containing half-mapping reads (-e)" />      	
-      </when>
-      <when value="alignment">
-      	<param format="fasta" name="existingContigsFile" type="data" label="FASTA file containing contigs (-c)" /> 
-      </when>
-    </conditional>
   </inputs>
   
   <outputs>
@@ -106,6 +53,6 @@ that determines whether mates are close enough together to form a group. (-m)" /
   </tests>
   
   <help>
-  	Runs the ip_handler.pl script.
+  	Runs the ip_handler.pl script to run the intron polymorphism pipeline.
   </help>
 </tool>
