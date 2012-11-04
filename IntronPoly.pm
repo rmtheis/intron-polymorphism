@@ -1296,7 +1296,7 @@ sub assemble_groups {
       $ofh2->close;
 
       capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 8"
-           . " >> $work_dir/taipan_output.txt 2>&1" );
+           . " >> $work_dir/${reads_basename}_taipan_output.txt 2>&1" );
       die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Append this group's results to the multi-FastA output file containing all contigs
@@ -1344,7 +1344,7 @@ sub assemble_groups {
     $ofh2->close;
 
     capture( "taipan -f $rawfile -c $min_contig_length -k 16 -o 1 -t 8"
-           . " >> $work_dir/taipan_output.txt 2>&1" );
+           . " >> $work_dir/${reads_basename}_taipan_output.txt 2>&1" );
     die "$0: taipan exited unsuccessful" if ( $EXITVAL != 0 );
 
     # Append this group's results to the multi-FastA output file containing all contigs
