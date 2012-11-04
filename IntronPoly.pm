@@ -161,7 +161,8 @@ sub set_bowtie_version {
  Example : $project->mapping_setup( "/tmp" );
  Returns : No return value
  Args    : Scalar full path to the index directory for the alignment program (BWA or Bowtie 1/2),
-           flag indicating whether to validate the reads file (optional)
+           flag indicating whether to validate the reads file (optional), flag indicating whether
+           to trim the reads using the trim2.pl adaptive trimming script (optional)
 
 =cut
 
@@ -169,14 +170,17 @@ sub mapping_setup {
   my $self                 = shift;
   my $index_dir            = shift;
   my $validate_reads       = shift || 0;
+  my $trim_reads           = shift || 0;
   my $scripts_dir          = $self->{"scripts_dir"};
   my $work_dir             = $self->{"work_dir"};
   my $ref_genome           = $self->{"ref_genome"}->{"full_pathname"};
   my $ref_genome_basename  = $self->{"ref_genome"}->{"basename"};
   my $ref_genome_dir       = $self->{"ref_genome"}->{"dir"};
   my $reads_dir            = $self->{"reads"}->{"dir"};
+  my $reads_basename       = $self->{"reads"}->{"basename"};
   my $mate1s               = $self->{"reads"}->{"mate1s"};
   my $mate2s               = $self->{"reads"}->{"mate2s"};
+  my $trim_output_file     = "${work_dir}/${reads_basename}_trim.out";
   die "$0: reference genome directory $ref_genome_dir does not exist" unless ( -d $ref_genome_dir );
   
   print "Validating Fasta reference genome data...\n";
@@ -197,7 +201,16 @@ sub mapping_setup {
     die "$0: validate_fastq.pl exited unsuccessful" if ( $EXITVAL != 0 );
   }
 
-  # Create directory for Bowtie index files if necessary
+  if ($trim_reads) {
+    # Trim reads by quality scores using the trim2.pl adaptive trim script, t=3
+    print "Trimming reads...\n";
+    capture("${scripts_dir}trim2.pl $mate1s $mate2s 3 40 > $trim_output_file");
+    die "$0: trim2.pl exited unsuccessful" if ( $EXITVAL != 0 );
+    $mate1s .= ".trimmed";
+    $mate2s .= ".trimmed";
+  }
+  
+  # Create directory for aligner index files if necessary
   $index_dir = $1 if ( $index_dir =~ /(.*)\/$/ );
   unless ( -d $index_dir ) {
     &_make_dir($index_dir);

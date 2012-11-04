@@ -38,6 +38,7 @@ my $usage_msg = "Usage:\n"
   . "    -m/--max-intron-length        <int>        [ default: 250       ]\n"
   . "    -t/--tolerance-simpair        <int>        [ default: 5         ]\n"
   . "    -r/--tolerance-blast          <int>        [ default: 500       ]\n"
+  . "    --trim-reads\n"
   . "    --validate-reads\n"
   . "    --version\n";
 
@@ -54,9 +55,10 @@ my $fragment_length = undef;            # Outer distance between mates
 my $min_mates = undef;                  # Minimum number of nearby half-mapping mates for local assembly
 my $min_contig_length;                  # Minimum contig length for local assembly
 my $intron_length = undef;              # Expected intron length for assembly
-my $tolerance-simpair = undef;          # Alignment position +/- tolerance for simulated pairs
-my $tolerance-blast = undef;            # Alignment position +/- tolerance for Blast-aligned pairs
+my $tolerance_simpair = undef;          # Alignment position +/- tolerance for simulated pairs
+my $tolerance_blast = undef;            # Alignment position +/- tolerance for Blast-aligned pairs
 my $index_dir = undef;                  # Directory containing index files for BWA/Blast
+my $trim_reads = undef;                 # Flag indicating whether to trim reads
 my $validate_reads;                     # Flag indicating whether to validate Fastq reads file
 my $version;                            # Flag to print version number and exit
 my $help;                               # Flag to print usage message and exit
@@ -71,13 +73,14 @@ GetOptions(
   "1|mate1-file=s" => \$mate1s,
   "2|mate2-file=s" => \$mate2s,
   "o|output-dir:s" => \$output_dir,
-  "u|output-file:s" -> \$output_file,
+  "u|output-file:s" => \$output_file,
   "f|fragment-length:i" => \$fragment_length,
   "a|min-mates:i" => \$min_mates,
   "l|min-contig-length:s" => \$min_contig_length,
   "m|max-intron-length:i" => \$intron_length,
-  "t|tolerance-simpair:s" => \$tolerance-simpair,
-  "r|tolerance-blast:s" => \$tolerance-blast,
+  "t|tolerance-simpair:s" => \$tolerance_simpair,
+  "r|tolerance-blast:s" => \$tolerance_blast,
+  "trim-reads" => \$trim_reads,
   "validate-reads" => \$validate_reads,
   "v|version" => \$version,
   "h|help" => \$help,
@@ -92,9 +95,10 @@ $fragment_length = $fragment_length || -1;
 $min_mates = $min_mates || 3;
 $min_contig_length = $min_contig_length || 70;
 $intron_length = $intron_length || 250;
-$tolerance-simpair = $tolerance-simpair || 5;
-$tolerance-blast = $tolerance-blast || 500;
+$tolerance_simpair = $tolerance_simpair || 5;
+$tolerance_blast = $tolerance_blast || 500;
 $index_dir = $index_dir || "index";
+$trim_reads = $trim_reads || 0;
 $validate_reads = $validate_reads || 0;
 
 # Print version number if requested
@@ -138,7 +142,7 @@ die "clustalw not available on PATH" if system("which clustalw >/dev/null 2>/dev
 # RUN THE PIPELINE #
 ####################
 
-$project->mapping_setup( $index_dir, $validate_reads );
+$project->mapping_setup( $index_dir, $validate_reads, $trim_reads);
 $project->build_bwa_index( $index_dir );
 $project->run_bwa_mapping();
 
@@ -149,8 +153,8 @@ $project->bwa_identify();
 $project->set_fragment_length( $fragment_length );
 $project->create_simulated_pairs();
 $project->align_simulated_pairs_bwa();
-$project->filter1( $tolerance-simpair );
-$project->filter2( $tolerance-blast );
+$project->filter1( $tolerance_simpair );
+$project->filter2( $tolerance_blast );
 
 #ASSEMBLY:
 $project->assemble_groups( $intron_length, $min_mates, $min_contig_length );

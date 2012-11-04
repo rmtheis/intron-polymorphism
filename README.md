@@ -27,7 +27,7 @@ Install project code:
 ## RUNNING
 
     cd intron-polymorphism
-    perl ip_handler.pl --ref-genome genome.fa -1 myfile_1.fq -2 myfile_2.fq
+    perl ip_handler.pl --ref-genome genome.fa -1 myfile_1.fq -2 myfile_2.fq --trim-reads
 
 ## PARAMETERS
 
@@ -51,6 +51,7 @@ Options:
     -m/--max-intron-length        <int>        [ default: 250       ]
     -t/--tolerance-simpair        <int>        [ default: 10        ]
     -r/--tolerance-blast          <int>        [ default: 500       ]
+    --trim-reads
     --validate-reads
     --version
 ```

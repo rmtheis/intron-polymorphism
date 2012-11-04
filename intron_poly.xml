@@ -16,6 +16,9 @@
       #if $fragLength.set == 'yes':
         --fragment-length ${fragLength.length}
       #end if
+      #if str($trimReads) == 'true':
+        --trim-reads
+      #end if
       #if str($validateReads) == 'true':
         --validate-reads
       #end if
@@ -42,6 +45,7 @@ that determines whether mates are close enough together to form a group. (-m)" /
     <param name="maxins" type="integer" value="3000" label="The maximum fragment length for valid paired-end alignments. This value is passed to Bowtie for the initial mapping. (-X)" />
     <param name="tolerance-simpair" value="5" label="The tolerance represents the number of base positions behind or forward of the expected alignment position allowed to consider the alignment as acceptable."/>
     <param name="tolerance-blast" value="500" label="The tolerance with which to consider Blast alignments of unmapped mates as aligned to the reference genome relative to the expected position of the alignment based on the mapped mate in the pair and the insert length."
+    <param name="trimReads" type="boolean" truevalue="true" falsevalue="false" checked="no" label="Trim the FASTQ reads files by quality score? (--trim-reads)" help="" />
     <param name="validateReads" type="boolean" truevalue="true" falsevalue="false" checked="no" label="Validate the FASTQ reads files? (--validate-reads)" help="" />
   </inputs>
   

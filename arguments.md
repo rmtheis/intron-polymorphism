@@ -47,6 +47,10 @@ The tolerance with which to consider simulated paired-end reads to have mapped t
 
 The tolerance with which to consider Blast alignments of unmapped mates as aligned to the reference genome relative to the expected position of the alignment based on the mapped mate in the pair and the insert length. Default is 500.
 
+    --trim-reads
+
+Runs the trim2.pl script to trim FASTQ reads by quality values.
+
     --validate-reads
 
 Runs the validate_fastq.pl validation script on the FASTQ reads files.
