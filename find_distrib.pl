@@ -21,10 +21,10 @@ use Getopt::Long;
 use IO::File;
 
 #
-# Bins the half-mapping reads in a Bowtie SAM file by position in the reference genome.
+# Bins the half-mapping reads in a SAM file by position in the reference genome.
 #
 
-my $usage_msg = "Bins distribution of Bowtie 2 half-mapping alignments along reported positions.\n"
+my $usage_msg = "Bins distribution of half-mapping alignments by position specified in a SAM file.\n"
               . "Usage: find_distrib.pl -i sam_file [-b bin_size (default: 100)] [--bowtie1]\n";
 die $usage_msg unless ( @ARGV );
 my ( $aligned, $input_file, $bowtie1 );
