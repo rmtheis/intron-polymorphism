@@ -37,8 +37,9 @@ my $non = 0;
 my $full = 0;
 my $half = 0;
 my $disc = 0;
+my $unk = 0;
 my $total = 0;
-my ( %flags_disc, %flags_full, %flags_non, %flags_half );
+my ( %flags_disc, %flags_full, %flags_non, %flags_half, %flags_unk );
 my $ifh = new IO::File( $input_file, 'r' ) or die "Can't open $input_file: $!";
 while ( my $line1 = $ifh->getline ) {
   next if $line1 =~ m/^@/;
@@ -55,7 +56,7 @@ while ( my $line1 = $ifh->getline ) {
   elsif (IntronPoly::_isHalfMappingPair($flags1, $flags2)) { $half++; $flags_half{"$flags1,$flags2"}++; }
   elsif (IntronPoly::_isInMappingPair($flags1)) { $full++; $flags_full{"$flags1,$flags2"}++; }
   elsif (IntronPoly::_isInNonMappingPair($flags1)) { $non++; $flags_non{"$flags1,$flags2"}++; }
-  else { print "not categorized: $flags1, $flags2\n"; }
+  else { $unk++; $flags_unk{"$flags1,$flags2"}++; }
 }
 $ifh->close;
 
@@ -63,6 +64,7 @@ my $percent_non = sprintf('%.3f', $non / $total * 100);
 my $percent_full = sprintf('%.3f', $full / $total * 100);
 my $percent_half = sprintf('%.3f', $half / $total * 100);
 my $percent_disc = sprintf('%.3f', $disc / $total * 100);
+my $percent_unk = sprintf('%.3f', $unk / $total * 100);
 print "Total reads: $total\n";
 print "Full-mapping: $full ($percent_full%)\n";
 foreach my $key (sort { $flags_full{$b} <=> $flags_full{$a} } keys %flags_full) {
@@ -79,6 +81,11 @@ foreach my $key (sort { $flags_half{$b} <=> $flags_half{$a} } keys %flags_half) 
 print "Discordant: $disc ($percent_disc%)\n";
 foreach my $key (sort { $flags_disc{$b} <=> $flags_disc{$a} } keys %flags_disc) {
   print "  $key: " . $flags_disc{$key} . "\n";
+}
+
+print "Uncategorized: $unk ($percent_unk%)\n";
+foreach my $key (sort { $flags_unk{$b} <=> $flags_unk{$a} } keys %flags_unk) {
+  print "  $key: " . $flags_unk{$key} . "\n";
 }
 
 exit;
