@@ -1276,8 +1276,8 @@ sub assemble_groups {
     my @fields = split( /\t/, $line );
     my ($id, $flags, $chr, $pos, $seq) = ($fields[0], int($fields[1]), $fields[2], $fields[7], $fields[9]);
 
-    # Calculate overlap distance for this alignment as distance = 2 x insert_length + intron_length
-    $overlap_dist = 2 * ($frag_length - 2 * length($seq)) + $intron_length;
+    # Calculate overlap distance for this alignment as distance = insert_length + intron_length
+    $overlap_dist = $frag_length + $intron_length;
 
     # Record the first position in the group
     if ($new_group == 1) {
