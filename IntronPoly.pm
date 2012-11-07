@@ -1319,6 +1319,7 @@ sub assemble_groups {
       while ( scalar(@groups) > 0 ) {
         my $ln = shift(@groups);
         my @fields = split( /\t/, $ln );
+        $chr = $fields[2];
         print $ofh $ln; # Record the SAM alignment data to a SAM file for this group
         print $ofh2 "$fields[9]\n"; # Record the raw read to a .raw file for this group
       }
@@ -1336,7 +1337,7 @@ sub assemble_groups {
         my $ifh2 = IO::File->new( $contigs_file, 'r' ) or die "$0: Can't open $contigs_file: $!";
         while ( my $contig_line = $ifh2->getline ) {
           if ($contig_line =~ m/^>/) {
-            print $ofh3 ">Group${count}(${left_pos}-${last_pos})|" . substr($contig_line, 1);
+            print $ofh3 ">Group${count}|$chr|(${left_pos}-${last_pos})|" . substr($contig_line, 1);
           } else {
             print $ofh3 $contig_line;
           }
@@ -1496,19 +1497,23 @@ sub align_groups_clustal() {
   return if (-z $contigs_file || !(-e $contigs_file));
   print "Aligning assembled contigs to reference genome using Clustal...\n";
   
+  # Fetch the portion of the reference genome we want to align to
+  
+  
   # Append reference genome file to assembled contigs for multiple sequence alignment
-  capture( "cat $contigs_file $ref_genome > $clustal_input_file");
-  die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
+  #capture( "cat $contigs_file $ref_genome > $clustal_input_file");
+  #die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
   
   # Call Clustal to run the mapping
-  capture( "clustalw -infile=$clustal_input_file -gapopen=50 -gapext=0.01 -outfile=$output_file_alignment" );
-  die "$0: clustalw exited unsuccessful" if ( $EXITVAL != 0 );
+  #capture( "clustalw -infile=$clustal_input_file -gapopen=50 -gapext=0.01 " .
+  #         "-outfile=$output_file_alignment -output=gde" );
+  #die "$0: clustalw exited unsuccessful" if ( $EXITVAL != 0 );
   
-  # Save a truncated version of the Clustal results
-  if (-e $output_file_alignment && !(-z $output_file_alignment)) { 
-    capture("${scripts_dir}trim_clustal.pl -i $output_file_alignment -m 100 > $output_file");
-    die "$0: trim_clustal.pl exited unsuccessful" if ( $EXITVAL != 0 );
-  }
+  ## Save a truncated version of the Clustal results
+  #if (-e $output_file_alignment && !(-z $output_file_alignment)) { 
+  #  capture("${scripts_dir}trim_clustal.pl -i $output_file_alignment -m 100 > $output_file");
+  #  die "$0: trim_clustal.pl exited unsuccessful" if ( $EXITVAL != 0 );
+  #}
   print "Trimmed alignment results saved to $output_file\n"
 }
 
