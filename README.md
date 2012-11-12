@@ -11,7 +11,9 @@ The following packages must be installed and added to your PATH:
 
 2. [Blast](http://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Web&PAGE_TYPE=BlastDocs&DOC_TYPE=Download)
 
-3. [Taipan](http://sourceforge.net/projects/taipan/)
+3. [ClustalW](http://www.clustal.org/clustal2/)
+
+4. [Taipan](http://sourceforge.net/projects/taipan/)
 
 ## INSTALLATION
 **_Linux (64-bit)_**

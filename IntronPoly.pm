@@ -1064,6 +1064,37 @@ sub filter1 {
   print "Discarded $discard_count mates out of $read_count\n";
 }
 
+=head2 build_blast_index
+
+ Title   : build_blast_index
+ Usage   : $project->build_blast_index()
+ Function: Creates the Blast index needed for running a Blast alignment.
+ Example : $project->bwa_identify();
+           $project->align_simulated_pairs_bwa();
+           $project->filter1( 5 );
+           $project->build_blast_index();
+           $project->filter2( 500 );
+ Returns : No return value
+ Args    : Directory to use for the index (optional)
+
+=cut
+
+sub build_blast_index() {
+  my $self                = shift;
+  my $index_dir           = shift || $self->{"index_dir"};
+  my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
+  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
+  my $reads_basename      = $self->{"reads"}->{"basename"};
+  unless ( -e "$index_dir/$ref_genome_basename.nhr"
+    && "$index_dir/$ref_genome_basename.nin"
+    && "$index_dir/$ref_genome_basename.nsq" )
+  {
+    # Call formatdb to create the Blast index
+    print "Creating Blast index in $index_dir...\n";
+    capture( "formatdb -p F -i $ref_genome -n $index_dir/$ref_genome_basename" );
+    die "$0: formatdb exited unsuccessful" if ( $EXITVAL != 0 );
+  }
+}
 
 =head2 filter2
 
@@ -1337,7 +1368,7 @@ sub assemble_groups {
         my $ifh2 = IO::File->new( $contigs_file, 'r' ) or die "$0: Can't open $contigs_file: $!";
         while ( my $contig_line = $ifh2->getline ) {
           if ($contig_line =~ m/^>/) {
-            print $ofh3 ">Group${count}|$chr|(${left_pos}-${last_pos})|" . substr($contig_line, 1);
+            print $ofh3 ">Group${count}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
           } else {
             print $ofh3 $contig_line;
           }
@@ -1385,7 +1416,7 @@ sub assemble_groups {
       my $ifh2 = IO::File->new( $contigs_file, 'r' ) or die "$0: Can't open $contigs_file: $!";
       while ( my $contig_line = $ifh2->getline ) {
         if ($contig_line =~ m/^>/) {
-          print $ofh3 ">Group${count}(${left_pos}-${last_pos})|" . substr($contig_line, 1);
+          print $ofh3 ">Group${count}|${left_pos}|${last_pos}|" . substr($contig_line, 1);
         } else {
           print $ofh3 $contig_line;
         }
@@ -1398,123 +1429,174 @@ sub assemble_groups {
     return;
   }
   if ($num_met_cutoff > 0) {
-    print "Successfully assembled $num_met_cutoff contigs out of $count groups identified in $work_dir/assembly/\n";
+    print "Successfully assembled $num_met_cutoff contigs out of $count groups identified\n";
   } else {
     print "No contigs assembled from $count groups identified.\n";
   }
 }
 
-=head2 build_blast_index
+=head2 align_contigs_clustal
 
- Title   : build_blast_index
- Usage   : $project->build_blast_index()
- Function: Creates the Blast index needed for running a Blast alignment.
- Example : $project->build_blast_index();
-           $project->align_groups_blast( "contigs.fa" );
- Returns : No return value
- Args    : Directory to use for the index (optional)
-
-=cut
-
-sub build_blast_index() {
-  my $self                = shift;
-  my $index_dir           = shift || $self->{"index_dir"};
-  my $ref_genome          = $self->{"ref_genome"}->{"full_pathname"};
-  my $ref_genome_basename = $self->{"ref_genome"}->{"basename"};
-  my $reads_basename      = $self->{"reads"}->{"basename"};
-  unless ( -e "$index_dir/$ref_genome_basename.nhr"
-    && "$index_dir/$ref_genome_basename.nin"
-    && "$index_dir/$ref_genome_basename.nsq" )
-  {
-    # Call formatdb to create the Blast index
-    print "Creating Blast index in $index_dir...\n";
-    capture( "formatdb -p F -i $ref_genome -n $index_dir/$ref_genome_basename" );
-    die "$0: formatdb exited unsuccessful" if ( $EXITVAL != 0 );
-  }
-}
-
-=head2 align_groups_blast
-
- Title   : align_groups_blast
- Usage   : $project->align_groups_blast()
+ Title   : align_contigs_clustal
+ Usage   : $project->align_contigs_clustal()
  Function: Aligns contigs assembled from half-mapping reads
  Example : $project->bwa_identify();
            $project->filter( 8 );
            $project->assemble_groups( 250, 3 );
-           $project->align_groups_blast();
+           $project->align_contigs_clustal();
  Returns : No return value
  Args    : Path to multi-FastA format file containing contigs for alignment (optional)
 
 =cut
 
-sub align_groups_blast() {
-  my $self                          = shift;
-  my $contigs_file                  = shift || $self->{"contigs_file"};
-  my $index_dir                     = $self->{"index_dir"};
-  my $work_dir                      = $self->{"work_dir"};
-  my $reads_basename                = $self->{"reads"}->{"basename"};
-  my $ref_genome_basename           = $self->{"ref_genome"}->{"basename"};
-  my $output_file                   = "$work_dir/${reads_basename}_contigs_aligned.blast";
-  my $err_file                      = "$work_dir/${reads_basename}_contigs_aligned.err";
-  my $index                         = "$index_dir/${ref_genome_basename}";
-  $self->{"contigs_alignment_file"} = $output_file;
-
-  return if (-z $contigs_file || !(-e $contigs_file));
-  print "Aligning assembled contigs to reference genome using Blast...\n";
+sub align_contigs_clustal() {
+  my $self           = shift;
+  my $contigs_file   = shift || $self->{"contigs_file"};
+  my $work_dir       = $self->{"work_dir"};
+  my $assembly_dir   = $self->{"assembly_dir"};
+  my $reads_basename = $self->{"reads"}->{"basename"};
+  my $ref_genome     = $self->{"ref_genome"}->{"full_pathname"};
+  my $scripts_dir    = $self->{"scripts_dir"};
+  my $output_file    = "$work_dir/${reads_basename}_candidates.fa";
   
-  # Call Blast to run the mapping
-  capture( "blastall -p blastn -d $index -i $contigs_file -o $output_file -e 1e-5 2> $err_file" );
-  die "$0: Blast exited unsuccessful" if ( $EXITVAL != 0 );
-  
-  print "Alignment results saved.\n";
-}
-
-=head2 align_groups_clustal
-
- Title   : align_groups_clustal
- Usage   : $project->align_groups_clustal()
- Function: Aligns contigs assembled from half-mapping reads
- Example : $project->bwa_identify();
-           $project->filter( 8 );
-           $project->assemble_groups( 250, 3 );
-           $project->align_groups_clustal();
- Returns : No return value
- Args    : Path to multi-FastA format file containing contigs for alignment (optional)
-
-=cut
-
-sub align_groups_clustal() {
-  my $self                          = shift;
-  my $contigs_file                  = shift || $self->{"contigs_file"};
-  my $work_dir                      = $self->{"work_dir"};
-  my $reads_basename                = $self->{"reads"}->{"basename"};
-  my $output_file                   = shift || "$work_dir/${reads_basename}_trimmed.aln";
-  my $ref_genome                    = $self->{"ref_genome"}->{"full_pathname"};
-  my $scripts_dir                   = $self->{"scripts_dir"};
-  my $output_file_alignment         = "$work_dir/${reads_basename}_contigs.aln";
-  my $clustal_input_file            = "$work_dir/${reads_basename}_pre-alignment";
-
   return if (-z $contigs_file || !(-e $contigs_file));
   print "Aligning assembled contigs to reference genome using Clustal...\n";
+
+  # Generate the files containing sequences for each group to be sent to Clustal
+  my $padding = 50; # Length of additional sequence past bounds to retrieve from reference
+  my $group = "";
+  my $last_group = "";
+  my $header_line = "";
+  my $count = 0;
+  my @group_lines = ();
+  my ($start, $stop); # Left/right bounds for the group
+  my $ifh = IO::File->new( $contigs_file, 'r' ) or die "$0: $contigs_file: $!";
+  my $seq_file;
+  my @seq_files; # All multi-Fasta input files for Clustal
+  my $ofh = undef;
+  while ( my $line = $ifh->getline ) { 
+    # Get the contigs that correspond to each sequence/chromosome of the reference genome
+    if ($line =~ m/^>/) {
+      $header_line = $line;
+      my @fields = split( /\|/, $line );
+      $group = $fields[0];
+      $start = $fields[2];
+      $stop = $fields[3];
+      $group =~ s/^\>//g;
+      next;
+    }
+    if ($group ne $last_group) { # Got the next group
+      # Define the file for writing the reference genome segment and all contigs for this group
+      $seq_file = "$assembly_dir/${reads_basename}_${group}_sequences.fa";
+      push(@seq_files, $seq_file);
+      
+      # Get the portion of the reference genome we want to align to
+      $start = $start - $padding;
+      $start = 0 if ($start < 0);
+      $stop = $stop + $padding;
+      capture( "${scripts_dir}trim_fasta.pl -i $ref_genome --start " . ($start + $padding) .
+               " --stop " . ($stop + $padding) . " > $seq_file");
+      die "$0: trim_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
+
+      # Write the first sequence for this group
+      $ofh->close if (defined $ofh);
+      $ofh = IO::File->new( $seq_file, 'a' ) or die "$0: $seq_file: $!";
+      print $ofh $header_line . $line;
+    } else { # Got another line for this group
+      print $ofh $header_line . $line
+    }
+    $last_group = $group; 
+  }
+  $ifh->close;
+  $ofh->close;
+
+  # Run Clustal for every group
+  foreach my $file (@seq_files) {
+    my $err_file = $file;
+    $err_file =~ s/(\.[^.]+)$/.err/;
+    
+    # Call Clustal to run the mapping
+    capture( "clustalw -infile=$file -gapopen=50 -gapext=0.01 -output=gde > $err_file" );
+    die "$0: clustalw exited unsuccessful" if ( $EXITVAL != 0 );
+    #capture( "clustalw -infile=$file -gapopen=50 -gapext=0.01" ) if DEBUG;
+    #die "$0: clustalw exited unsuccessful" if ( $EXITVAL != 0 && DEBUG);
+  }
+
+  # Parse the Clustal results for every group
+  foreach my $file (@seq_files) {
+    my $gde_file = $file;
+    $gde_file =~ s/(\.[^.]+)$/.gde/;
+    my $err_file = $file;
+    $err_file =~ s/(\.[^.]+)$/.err/;
+    my $counts_file = $file if DEBUG;
+    $counts_file =~ s/(\.[^.]+)$/.counts/ if DEBUG;
+    
+    # Use a hash to count the number of aligned sequences at each position
+    my %counts = ();
+    my $pos = 0;
+    my $start;
+    $ifh = IO::File->new( $gde_file, 'r' ) or die "$0: $gde_file: $!";
+    $ofh = IO::File->new( $counts_file, 'w' ) or die "$0: $counts_file: $!" if DEBUG;
+    while ( my $line = $ifh->getline ) {
+      if ($line =~ m/^#/) {
+        $start = $1 if ($line =~ m/^#trimmed-sequence\|(\d+)/);
+        $pos = 0;
+        next;
+      }
+      $line =~ s/\s+$//g;
+      foreach my $c (split //, $line) {
+        if ($c ne "-") {
+          $counts{$pos}++;
+        }
+        $pos++;
+      }
+    }
+    $ifh->close;
+    
+    # Convert the number of aligned sequences at each position into a string
+    my $count_string = "";
+    for (my $i = 0; $i < $pos; $i++) {
+      if ($counts{$i} <= 9) {
+        $count_string .= "$counts{$i}";
+      } else {
+        $count_string .= "9"; # Use a single digit for values >9 
+      }
+    }
+    for ( my $i = 0; $i < length($count_string); $i += 20) {
+      print $ofh substr($count_string, $i, 20), "\n" if DEBUG;
+    }
+    $ofh->close if DEBUG;
+    
+    # Find regions between alignments
+    my $saved_sequence = "";
+    my $i = $start;
+    my $last_c = "1";
+    my $aln_start = -1;
+    my $aln_stop = -1;
+    foreach my $c (split //, $count_string) {
+      $i++;
+      # Look for the end of an aligned region
+      if ($last_c > 1 && $c eq "1") {
+        $aln_start = $i;
+      }
+      
+      # Look for the beginning of an aligned region
+      if ($last_c eq "1" && $c > 1 && $aln_start != -1) {
+        $aln_stop = $i;
+        print "$file: candidate at $i: $last_c -> $c. sequence length is " .
+               ($aln_stop - $aln_start) . "\n" if DEBUG;
+        
+        # Get the sequence between two alignments directly from the reference genome
+        capture("${scripts_dir}trim_fasta.pl -i $ref_genome --start $aln_start " .
+                " --stop $aln_stop >> $output_file");
+        die "$0: trim_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
+        
+        $aln_start = -1;
+      }
+      $last_c = $c;
+    }
+  }
   
-  # Fetch the portion of the reference genome we want to align to
-  
-  
-  # Append reference genome file to assembled contigs for multiple sequence alignment
-  #capture( "cat $contigs_file $ref_genome > $clustal_input_file");
-  #die "$0: cat exited unsuccessful" if ( $EXITVAL != 0 );
-  
-  # Call Clustal to run the mapping
-  #capture( "clustalw -infile=$clustal_input_file -gapopen=50 -gapext=0.01 " .
-  #         "-outfile=$output_file_alignment -output=gde" );
-  #die "$0: clustalw exited unsuccessful" if ( $EXITVAL != 0 );
-  
-  ## Save a truncated version of the Clustal results
-  #if (-e $output_file_alignment && !(-z $output_file_alignment)) { 
-  #  capture("${scripts_dir}trim_clustal.pl -i $output_file_alignment -m 100 > $output_file");
-  #  die "$0: trim_clustal.pl exited unsuccessful" if ( $EXITVAL != 0 );
-  #}
-  print "Trimmed alignment results saved to $output_file\n"
 }
 
 ############ Subroutines for internal use by this module ############

@@ -134,6 +134,7 @@ $project->build_db(
 );
 
 # Ensure required executables are available
+die "blastall not available on PATH" if system("which blastall >/dev/null 2>/dev/null") != 0;
 die "bwa not available on PATH" if system("which bwa >/dev/null 2>/dev/null") != 0;
 die "taipan not available on PATH" if system("which taipan >/dev/null 2>/dev/null") != 0;
 die "clustalw not available on PATH" if system("which clustalw >/dev/null 2>/dev/null") != 0;
@@ -161,8 +162,7 @@ $project->assemble_groups( $intron_length, $min_mates, $min_contig_length );
 
 #ALIGNMENT:
 $project->build_blast_index( $index_dir );
-$project->align_groups_blast( $output_file );
-#$project->align_groups_clustal( $output_file );
+$project->align_contigs_clustal( $output_file );
 
 # Copy latest run to "run-latest" directory for quickly locating the last-run results
 #system( "rm -rf run-latest/*" );
