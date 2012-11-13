@@ -1463,7 +1463,7 @@ sub align_contigs_clustal() {
   print "Aligning assembled contigs to reference genome using Clustal...\n";
 
   # Generate the files containing sequences for each group to be sent to Clustal
-  my $padding = 50; # Length of additional sequence past bounds to retrieve from reference
+  my $padding = 200; # Length of additional sequence past bounds to retrieve from reference
   my $group = "";
   my $last_group = "";
   my $header_line = "";
