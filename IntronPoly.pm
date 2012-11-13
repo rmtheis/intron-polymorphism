@@ -1525,6 +1525,7 @@ sub align_contigs_clustal() {
   }
 
   # Parse the Clustal results for every group
+  my $reg_count = 0;
   foreach my $file (@seq_files) {
     my $gde_file = $file;
     $gde_file =~ s/(\.[^.]+)$/.gde/;
@@ -1582,10 +1583,10 @@ sub align_contigs_clustal() {
         $aln_start = $i;
       }
       
-      # Look for the beginning of an aligned region
-      if ($last_c eq "1" && $c > 1 && $aln_start != -1) {
+      # Look for the beginning of an aligned region, and a minimum length of 50
+      if ($last_c eq "1" && $c > 1 && $aln_start != -1 && (($aln_stop - $aln_start) >= 50)) {
         $aln_stop = $i;
-        
+        $reg_count++;
         # Get the sequence between two alignments directly from the reference genome
         capture("${scripts_dir}trim_fasta.pl -i $ref_genome --start $aln_start " .
                 " --stop $aln_stop >> $output_file");
@@ -1596,7 +1597,7 @@ sub align_contigs_clustal() {
       $last_c = $c;
     }
   }
-  
+  print "Identified $reg_count candidate insertion/deletion regions.\n";
 }
 
 ############ Subroutines for internal use by this module ############
