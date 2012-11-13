@@ -1416,7 +1416,7 @@ sub assemble_groups {
       my $ifh2 = IO::File->new( $contigs_file, 'r' ) or die "$0: Can't open $contigs_file: $!";
       while ( my $contig_line = $ifh2->getline ) {
         if ($contig_line =~ m/^>/) {
-          print $ofh3 ">Group${count}|${left_pos}|${last_pos}|" . substr($contig_line, 1);
+          print $ofh3 ">Group${count}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
         } else {
           print $ofh3 $contig_line;
         }
