@@ -1,5 +1,5 @@
 <!-- Galaxy Tool Definition File -->
-<tool id="intron_poly" name="intron-polymorphism" version="0.1">
+<tool id="intron_poly" name="intron-polymorphism" version="1.0">
   <description>Find intron polymorphisms</description>
   <version_command>ip_handler.pl --version</version_command>
   <command>
@@ -29,7 +29,7 @@
     <param format="fasta" name="refGenome" type="data" label="FASTA reference genome (-g)" />
     <conditional name="fragLength">
       <param name="set" type="select" label="Fragment length">
-        <option value="no">Detect fragment length value</option>
+        <option value="no">Detect fragment length</option>
         <option value="yes">Set fragment length</option>
       </param>
       <when value="yes">
@@ -37,26 +37,34 @@
       </when>
       <when value="no" />
     </conditional>
-    <param name="minMates" type="integer" value="3" label="The minimum number of mates required to form a group in the grouping step in the pipeline. (-a)" />
-    <param name="minContigLength" type="integer" value="16" label="The minimum contig length needed for assembling the mates in a group. This value is passed to the Taipan assembler. (-l)" />
-    <param name="maxIntronLength" type="integer" value="250" label="The intron length value to use when looking for groups of introns near one another. This value contributes to a distance value
-that determines whether mates are close enough together to form a group. (-m)" />
-    <param name="minins" type="integer" value="0" label="The minimum fragment length for valid paired-end alignments. This value is passed to Bowtie for the initial mapping. (-I)" />
-    <param name="maxins" type="integer" value="3000" label="The maximum fragment length for valid paired-end alignments. This value is passed to Bowtie for the initial mapping. (-X)" />
-    <param name="tolerance-simpair" value="5" label="The tolerance represents the number of base positions behind or forward of the expected alignment position allowed to consider the alignment as acceptable."/>
-    <param name="tolerance-blast" value="500" label="The tolerance with which to consider Blast alignments of unmapped mates as aligned to the reference genome relative to the expected position of the alignment based on the mapped mate in the pair and the insert length."
-    <param name="trimReads" type="boolean" truevalue="true" falsevalue="false" checked="no" label="Trim the FASTQ reads files by quality score? (--trim-reads)" help="" />
-    <param name="validateReads" type="boolean" truevalue="true" falsevalue="false" checked="no" label="Validate the FASTQ reads files? (--validate-reads)" help="" />
+    <param name="minMates" type="integer" value="3" label="The minimum number of mates required to form a group in 
+    	the grouping step in the pipeline. (-a)" />
+    <param name="minContigLength" type="integer" value="16" label="The minimum contig length needed for assembling 
+    	the mates in a group. This value is passed to the Taipan assembler. (-l)" />
+    <param name="maxIntronLength" type="integer" value="250" label="The intron length value to use when looking for	
+    	groups of introns near one another. This value contributes to a distance value that determines whether mates 
+    	are close enough together to form a group. (-m)" />
+    <param name="tolerance-simpair" type="integer" value="5" label="Simulated pair tolerance. This tolerance 
+    	represents the number of base positions behind or forward of the expected alignment position allowed to consider 
+    	the simulated pair alignment as acceptable. (-t)"/>
+    <param name="tolerance-blast" type="integer" value="500" label="Blast tolerance. This tolerance with which to
+    	consider Blast alignments of unmapped mates as aligned to the reference genome. Values are relative to the
+    	expected position of the alignment, based on the position of the mapped mate in the pair and the insert 
+    	length. (-r)" />
+    <param name="trimReads" type="boolean" truevalue="true" falsevalue="false" checked="no" label="Trim the FASTQ 
+    	reads files by quality score? (--trim-reads)" help="" />
+    <param name="validateReads" type="boolean" truevalue="true" falsevalue="false" checked="no" label="Validate the 
+    	FASTQ reads files? (--validate-reads)" help="" />
   </inputs>
   
   <outputs>
-    <data format="txt" name="outputFile" label="IntronPoly alignment results" />
+    <data format="fasta" name="outputFile" label="IntronPoly intron insertion/deletion candidates" />
   </outputs>
   
   <tests>
   </tests>
   
   <help>
-  	Runs the ip_handler.pl script to run the intron polymorphism pipeline.
+  	Runs the ip_handler.pl script to run the intron-polymorphism pipeline.
   </help>
 </tool>
