@@ -1584,15 +1584,16 @@ sub align_contigs_clustal() {
       }
       
       # Look for the beginning of an aligned region, and a minimum length of 50
-      if ($last_c eq "1" && $c > 1 && $aln_start != -1 && (($aln_stop - $aln_start) >= 50)) {
+      if ($last_c eq "1" && $c > 1 && $aln_start != -1) {
         $aln_stop = $i;
-        $reg_count++;
-        # Get the sequence between two alignments directly from the reference genome
-        capture("${scripts_dir}trim_fasta.pl -i $ref_genome --start $aln_start " .
-                " --stop $aln_stop >> $output_file");
-        die "$0: trim_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
-        
-        $aln_start = -1;
+        if ($aln_stop - $aln_start >= 50) {
+          $reg_count++;
+          # Get the sequence between two alignments directly from the reference genome
+          capture("${scripts_dir}trim_fasta.pl -i $ref_genome --start $aln_start " .
+                  " --stop $aln_stop >> $output_file");
+          die "$0: trim_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
+          $aln_start = -1;
+        }
       }
       $last_c = $c;
     }
