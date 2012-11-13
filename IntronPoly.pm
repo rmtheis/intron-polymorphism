@@ -1399,6 +1399,7 @@ sub assemble_groups {
     while ( scalar(@groups) > 0 ) {
       my $ln = shift(@groups);
       my @fields = split( /\t/, $ln );
+      $chr = $fields[2];
       print $ofh $ln; # Record the SAM alignment data to a SAM file for this group
       print $ofh2 "$fields[9]\n"; # Record the raw read to a .raw file for this group
     }
@@ -1416,7 +1417,7 @@ sub assemble_groups {
       my $ifh2 = IO::File->new( $contigs_file, 'r' ) or die "$0: Can't open $contigs_file: $!";
       while ( my $contig_line = $ifh2->getline ) {
         if ($contig_line =~ m/^>/) {
-          print $ofh3 ">Group${count}|${left_pos}|${last_pos}|" . substr($contig_line, 1);
+          print $ofh3 ">Group${count}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
         } else {
           print $ofh3 $contig_line;
         }
