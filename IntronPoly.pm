@@ -1585,8 +1585,6 @@ sub align_contigs_clustal() {
       # Look for the beginning of an aligned region
       if ($last_c eq "1" && $c > 1 && $aln_start != -1) {
         $aln_stop = $i;
-        print "$file: candidate at $i: $last_c -> $c. sequence length is " .
-               ($aln_stop - $aln_start) . "\n" if DEBUG;
         
         # Get the sequence between two alignments directly from the reference genome
         capture("${scripts_dir}trim_fasta.pl -i $ref_genome --start $aln_start " .
