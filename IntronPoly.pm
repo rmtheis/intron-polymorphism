@@ -1396,6 +1396,7 @@ sub assemble_groups {
     my $rawfile = "$work_dir/assembly/${reads_basename}_group$count.raw";
     my $ofh = IO::File->new( $samfile, 'w' ) or die "$0: Can't open $samfile: $!";
     my $ofh2 = IO::File->new( $rawfile, 'w' ) or die "$0: Can't open $rawfile: $!";
+    my $chr;
     while ( scalar(@groups) > 0 ) {
       my $ln = shift(@groups);
       my @fields = split( /\t/, $ln );
