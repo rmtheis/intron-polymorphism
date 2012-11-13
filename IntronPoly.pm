@@ -1299,9 +1299,9 @@ sub assemble_groups {
   my $last_len = 0;
   my $overlap_dist;
   my $count = 0;
-  my $num_met_cutoff = 0;
   my $new_group = 1;
   my $left_pos = 0;
+  my $unique = 0;
   while ( my $line = $ifh->getline ) {
     next if $line =~ m/^@/;
     my @fields = split( /\t/, $line );
@@ -1364,11 +1364,11 @@ sub assemble_groups {
       # Append this group's results to the multi-FastA output file containing all contigs
       my $contigs_file = "${rawfile}${contigs_file_suffix}";
       if (!(-z $contigs_file)) {
-        $num_met_cutoff++;
         my $ifh2 = IO::File->new( $contigs_file, 'r' ) or die "$0: Can't open $contigs_file: $!";
         while ( my $contig_line = $ifh2->getline ) {
           if ($contig_line =~ m/^>/) {
-            print $ofh3 ">Group${count}-${num_met_cutoff}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
+            $unique++;
+            print $ofh3 ">Group${count}-${unique}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
           } else {
             print $ofh3 $contig_line;
           }
@@ -1414,11 +1414,11 @@ sub assemble_groups {
     # Append this group's results to the multi-FastA output file containing all contigs
     my $contigs_file = "${rawfile}${contigs_file_suffix}";
     if (!(-z $contigs_file)) {
-      $num_met_cutoff++;
       my $ifh2 = IO::File->new( $contigs_file, 'r' ) or die "$0: Can't open $contigs_file: $!";
       while ( my $contig_line = $ifh2->getline ) {
         if ($contig_line =~ m/^>/) {
-          print $ofh3 ">Group${count}-${num_met_cutoff}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
+          $unique++;
+          print $ofh3 ">Group${count}-${unique}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
         } else {
           print $ofh3 $contig_line;
         }
@@ -1430,8 +1430,8 @@ sub assemble_groups {
     print "No groups identified for assembly.\n";
     return;
   }
-  if ($num_met_cutoff > 0) {
-    print "Successfully assembled $num_met_cutoff contigs out of $count groups identified\n";
+  if ($unique > 0) {
+    print "Successfully assembled $unique contigs out of $count groups identified\n";
   } else {
     print "No contigs assembled from $count groups identified.\n";
   }
