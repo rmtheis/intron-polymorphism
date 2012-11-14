@@ -1466,6 +1466,7 @@ sub align_contigs_clustal() {
 
   # Generate the files containing sequences for each group to be sent to Clustal
   my $padding = 200; # Length of additional sequence past bounds to retrieve from reference
+  my $chr = "";
   my $group = "";
   my $last_group = "";
   my $header_line = "";
@@ -1482,6 +1483,7 @@ sub align_contigs_clustal() {
       $header_line = $line;
       my @fields = split( /\|/, $line );
       $group = $fields[0];
+      $chr = $fields[1];
       $start = $fields[2];
       $stop = $fields[3];
       $group =~ s/^\>//g;
@@ -1496,8 +1498,8 @@ sub align_contigs_clustal() {
       $start = $start - $padding;
       $start = 0 if ($start < 0);
       $stop = $stop + $padding;
-      capture( "${scripts_dir}trim_fasta.pl -i $ref_genome --start " . ($start + $padding) .
-               " --stop " . ($stop + $padding) . " > $seq_file");
+      capture( "${scripts_dir}trim_fasta.pl -i $ref_genome -s $chr --start " .
+              ($start + $padding) . " --stop " . ($stop + $padding) . " > $seq_file");
       die "$0: trim_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
 
       # Write the first sequence for this group
@@ -1537,12 +1539,15 @@ sub align_contigs_clustal() {
     # Use a hash to count the number of aligned sequences at each position
     my %counts = ();
     my $pos = 0;
-    my $start;
+    my ($chr, $start);
     $ifh = IO::File->new( $gde_file, 'r' ) or die "$0: $gde_file: $!";
     $ofh = IO::File->new( $counts_file, 'w' ) or die "$0: $counts_file: $!" if DEBUG;
     while ( my $line = $ifh->getline ) {
       if ($line =~ m/^#/) {
-        $start = $1 if ($line =~ m/^#trimmed-sequence\|(\d+)/);
+        if ($line =~ m/^#trimmed-sequence\|(\d+)\|\d+\|(\s+)/) {
+          $start = $1;
+          $chr = $2;
+        }
         $pos = 0;
         next;
       }
@@ -1590,7 +1595,7 @@ sub align_contigs_clustal() {
           $reg_count++;
           # Get the sequence between two alignments directly from the reference genome
           capture("${scripts_dir}trim_fasta.pl -i $ref_genome --start $aln_start " .
-                  " --stop $aln_stop >> $output_file");
+                  " -s $chr --stop $aln_stop >> $output_file");
           die "$0: trim_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
           $aln_start = -1;
         }

@@ -19,18 +19,19 @@ use Getopt::Long;
 use IO::File;
 
 #
-# Given start and stop positions, return the resulting subsequence from a Fasta file.
+# Given sequence name and start/stop positions, return the resulting subsequence from a Fasta file.
 #
-# Positions are indexed starting with the first sequence character in the multi-Fasta file.
-# Header lines do not affect start/stop positions. Output goes to standard out.
+# Positions are indexed starting with the first character in the given sequence.
+# Output goes to standard out.
 #
 
 my $usage_msg = "From a Fasta file, returns the subsequence delimited by <start> and <stop> index.\n"
-              . "Usage: trim_fasta.pl -i myfile.fa --start <int> --stop <int>\n";
+              . "Usage: trim_fasta.pl -s scaffold_1 -i myfile.fa --start <int> --stop <int>\n";
 die $usage_msg unless ( @ARGV );
-my ( $in, $start, $stop );
+my ( $in, $chr, $start, $stop );
 GetOptions(
   "i=s" => \$in,
+  "s=s" => \$chr,
   "l|start=s" => \$start,
   "r|stop=s" => \$stop,
   ) || die "$0: Bad option";
@@ -40,40 +41,45 @@ $in =~ s/^~/$ENV{HOME}/;
 my $ifh = new IO::File( $in, 'r' ) or die "Can't open $in: $!";
 my $index = 0;
 my $seq = "";
-my $last_header = "";
+# Find the header line for the requested section
 while ( my $line = $ifh->getline ) {
-    if ($line =~ m/^>/) {
-      $last_header = $line;
-      next;
-    }
-    $line =~ s/\s+$//g; # Remove trailing whitespace
-    $index += length($line);
-    next if ($index < $start);
-    
-    if ($index >= $stop && abs($stop - $start) <= length($line)) {
-      # Get the entire sequence we want, it's all on one line
-      $seq = substr($line, length($line) - ($index - $start), $stop - $start);
-      last;
-    }
-    
-    if ($index >= $stop) {
-      # Get the last portion of the sequence we want
-      $seq = $seq . substr($line, 0, length($line) - ($index - $stop));      
-      last;
-    }
+  if ($line =~ m/^>/) {
+    $line =~ s/^\>|\s+$//g;
+    last if ($line eq $chr);
+  }
+}
 
-    if (abs($index - $start) < length($line)) {
-      # Get the beginning of the sequence we want
-      $seq = $seq . substr($line, -($index - $start))
-    } else {
-      # Get intermediate lines in the sequence we want
-      $seq .= $line;
-    }
-    
+# Find the subsequence from this section
+while ( my $line = $ifh->getline ) {
+  last if ($line =~ m/^>/); # Stop if we've reached the end of this sequence
+  $line =~ s/\s+$//g; # Remove trailing whitespace
+  $index += length($line);
+  next if ($index < $start);
+  
+  if ($index >= $stop && abs($stop - $start) <= length($line)) {
+    # Get the entire sequence we want, it's all on one line
+    $seq = substr($line, length($line) - ($index - $start), $stop - $start);
+    last;
+  }
+  
+  if ($index >= $stop) {
+    # Get the last portion of the sequence we want
+    $seq = $seq . substr($line, 0, length($line) - ($index - $stop));      
+    last;
+  }
+
+  if (abs($index - $start) < length($line)) {
+    # Get the beginning of the sequence we want
+    $seq = $seq . substr($line, -($index - $start))
+  } else {
+    # Get intermediate lines in the sequence we want
+    $seq .= $line;
+  }
+  
 }
 $ifh->close;
-$last_header =~ s/^\>|\s+$//g;
-print ">trimmed-sequence|$start|$stop|$last_header\n";
+die if (length($seq) == 0);
+print ">trimmed-sequence|$start|$stop|$chr\n";
 my $length = 70; # Number of characters per line for sequences
 for ( my $pos = 0; $pos < length($seq); $pos += $length) {
   print substr($seq, $pos, $length), "\n";
