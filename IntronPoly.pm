@@ -1418,7 +1418,7 @@ sub assemble_groups {
       while ( my $contig_line = $ifh2->getline ) {
         if ($contig_line =~ m/^>/) {
           $unique++;
-          print $ofh3 ">Group${count}-${unique}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
+          print $ofh3 ">Group${count}|${unique}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
         } else {
           print $ofh3 $contig_line;
         }
@@ -1483,9 +1483,9 @@ sub align_contigs_clustal() {
       $header_line = $line;
       my @fields = split( /\|/, $line );
       $group = $fields[0];
-      $chr = $fields[1];
-      $start = $fields[2];
-      $stop = $fields[3];
+      $chr = $fields[2];
+      $start = $fields[3];
+      $stop = $fields[4];
       $group =~ s/^\>//g;
       next;
     }
