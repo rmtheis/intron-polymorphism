@@ -35,7 +35,7 @@ GetOptions(
   "l|start=s" => \$start,
   "r|stop=s" => \$stop,
   ) || die "$0: Bad option";
-die $usage_msg unless ( defined $in && defined $start && defined $stop );
+die $usage_msg unless ( defined $in && defined $chr && defined $start && defined $stop );
 die "Bad start/stop position." if ( $stop <= $start || $start < 0 || $stop < 0 );
 $in =~ s/^~/$ENV{HOME}/;
 my $ifh = new IO::File( $in, 'r' ) or die "Can't open $in: $!";
