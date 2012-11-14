@@ -79,7 +79,7 @@ while ( my $line = $ifh->getline ) {
 }
 $ifh->close;
 die if (length($seq) == 0);
-print ">trimmed-sequence|$start|$stop|$chr\n";
+print ">#$chr|$start|$stop\n";
 my $length = 70; # Number of characters per line for sequences
 for ( my $pos = 0; $pos < length($seq); $pos += $length) {
   print substr($seq, $pos, $length), "\n";

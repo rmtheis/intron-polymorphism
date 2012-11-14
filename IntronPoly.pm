@@ -1544,9 +1544,9 @@ sub align_contigs_clustal() {
     $ofh = IO::File->new( $counts_file, 'w' ) or die "$0: $counts_file: $!" if DEBUG;
     while ( my $line = $ifh->getline ) {
       if ($line =~ m/^#/) {
-        if ($line =~ m/^#trimmed-sequence\|(\d+)\|\d+\|(\s+)/) {
-          $start = $1;
-          $chr = $2;
+        if ($line =~ m/^##(\S+)\|(\d+)\|/) { # Trimmed sequence from reference genome
+          $chr = $1;
+          $start = $2;
         }
         $pos = 0;
         next;
