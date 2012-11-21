@@ -1368,7 +1368,7 @@ sub assemble_groups {
         while ( my $contig_line = $ifh2->getline ) {
           if ($contig_line =~ m/^>/) {
             $unique++;
-            print $ofh3 ">Group${count}-${unique}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
+            print $ofh3 ">Group${count}|${unique}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
           } else {
             print $ofh3 $contig_line;
           }
@@ -1441,7 +1441,8 @@ sub assemble_groups {
 
  Title   : align_contigs_clustal
  Usage   : $project->align_contigs_clustal()
- Function: Aligns contigs assembled from half-mapping reads
+ Function: Aligns contigs to the reference genome pairwise using Clustal, and identifies reference
+           genome regions between the resulting aligned regions
  Example : $project->bwa_identify();
            $project->filter( 8 );
            $project->assemble_groups( 250, 3 );
@@ -1476,11 +1477,9 @@ sub align_contigs_clustal() {
   my $ifh = IO::File->new( $contigs_file, 'r' ) or die "$0: $contigs_file: $!";
   my $seq_file;
   my @seq_files; # Multi-Fasta input filenames for this group
-  my @all_gde_files; # GDE data filenames for all groups
-  my @all_gde_chr; # Sequence name in reference genome, corresponding to all_gde_files filenames
-  my @all_gde_start; # Start position in ref genome, corresponding to all_gde_files filenames
   my $ofh = undef;
   my $ref;
+  my $reg_count = 0;
   while ( my $line = $ifh->getline ) { 
     # Get the contigs that correspond to each sequence/chromosome of the reference genome
     if ($line =~ m/^>/) {
@@ -1505,38 +1504,55 @@ sub align_contigs_clustal() {
           push(@group_gde_files, $gde_file);
   
           # Call Clustal to run the mapping
-          capture( "clustalw -infile=$file -gapopen=50 -gapext=0.01 -output=gde > $err_file" );
+          capture( "clustalw -infile=$file -dnamatrix=clustalw -gapopen=50 -gapext=0.01 " .
+                   "-output=gde > $err_file" );
           die "$0: clustalw exited unsuccessful" if ( $EXITVAL != 0 );
-        }
-        @seq_files = ();
-        
-        # Concatenate the Clustal GDE results for the previous group into a single file for parsing
-        my $group_gde_file = "$assembly_dir/${reads_basename}_${last_group}_all_pairwise.gde";
-        my $ofh2 = IO::File->new( $group_gde_file, 'w' ) or die "$0: $group_gde_file: $!";
-        my ($group_chr, $group_start);
-        foreach my $file (@group_gde_files) {
-          my $ifh2 = IO::File->new( $file, 'r' ) or die "$0: $file: $!";
-          my $print_flag = 0;
-          while (my $gline = $ifh2->getline) {         
-            # Keep the pairwise alignment results, but not the reference sequence data
-            if ($gline =~ m/^##(\S+)\|(\d+)\|/) {
-              $print_flag = 0;
-              $group_chr = $1;
-              $group_start = $2;
-            } elsif ($gline =~ m/^\#/) {
-              print $ofh2 $gline;
-              $print_flag = 1;
+          
+          # Read the Clustal alignment output into memory
+          my $pos = 0;
+          my $keep_flag;
+          my $qseq = "";
+          my $ifh2 = IO::File->new( $gde_file, 'r' ) or die "$0: $gde_file: $!";
+          while ( my $qline = $ifh2->getline ) {
+            if ($qline =~ m/^##/) {
+              $keep_flag = 0; # Disregard the reference sequence here
+            } elsif ($qline =~ m/^#/) {
+              $keep_flag = 1; # Keep the contig alignment result
             } else {
-              print $ofh2 $gline if $print_flag;
+              $qline =~ s/\s+$//g;
+              $qseq .= $qline if $keep_flag;
             }
           }
           $ifh2->close;
-        }
-        $ofh2->close;
         
-        push(@all_gde_files, $group_gde_file);
-        push(@all_gde_chr, $group_chr);
-        push(@all_gde_start, $group_start);
+          # Look for long gaps between aligned regions
+          my $i = $start;
+          my $last_c = "-";
+          my $aln_start = -1;
+          my $aln_stop = -1;
+          foreach my $c (split //, $qseq) {
+            $i++;
+            # Look for the end of an aligned region
+            if ($last_c ne "-" && $c eq "-") {
+              $aln_start = $i;
+            }
+            
+            # Look for the beginning of an aligned region, and a minimum length of 50
+            if ($last_c eq "-" && $c ne "-" && $aln_start != -1) {
+              $aln_stop = $i;
+              if ($aln_stop - $aln_start >= 50) {
+                $reg_count++;
+                # Get the sequence between two alignments directly from the reference genome
+                capture("${scripts_dir}trim_fasta.pl -i $ref_genome --start $aln_start " .
+                        " -s $chr --stop $aln_stop >> $output_file");
+                die "$0: trim_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
+                $aln_start = -1;
+              }
+            }
+            $last_c = $c;
+          }
+        }
+        @seq_files = ();
       }
       
       # Define the file for writing the reference genome segment and all contigs for this group
@@ -1567,87 +1583,7 @@ sub align_contigs_clustal() {
     $last_group = $group; 
   }
   $ifh->close;
-  $ofh->close;
-  
-  # Parse the Clustal results for every group
-  my $reg_count = 0;
-  foreach my $file (@all_gde_files) {
-    my $m_chr = shift(@all_gde_chr);
-    my $m_start = shift(@all_gde_start);
-    
-    my $err_file = $file;
-    $err_file =~ s/(\.[^.]+)$/.err/;
-    my $counts_file = $file if DEBUG;
-    $counts_file =~ s/(\.[^.]+)$/.counts/ if DEBUG;
-    
-    # Use a hash to count the number of aligned sequences at each position
-    my %counts = ();
-    my $pos = 0;
-    $ifh = IO::File->new( $file, 'r' ) or die "$0: $file: $!";
-    $ofh = IO::File->new( $counts_file, 'w' ) or die "$0: $counts_file: $!" if DEBUG;
-    while ( my $line = $ifh->getline ) {
-      if ($line =~ m/^#/) {
-        $pos = 0;
-        next;
-      }
-      $line =~ s/\s+$//g;
-      foreach my $c (split //, $line) {
-        if ($c ne "-") {
-          $counts{$pos}++;
-        } elsif ($c eq "-") {
-          # Set the count to zero for this position if uninitialized
-          if (!defined $counts{$pos}) {
-            $counts{$pos} = "0";
-          }
-        }
-        $pos++;
-      }
-    }
-    $ifh->close;
-    
-    # Convert the number of aligned sequences at each position into a string
-    my $count_string = "";
-    for (my $i = 0; $i < $pos; $i++) {
-      if ($counts{$i} <= 9) {
-        $count_string .= "$counts{$i}";
-      } else {
-        $count_string .= "9"; # Use a single digit for values >9 
-      }
-    }
-    for ( my $i = 0; $i < length($count_string); $i += 20) {
-      print $ofh substr($count_string, $i, 20), "\n" if DEBUG;
-    }
-    $ofh->close if DEBUG;
-    
-    # Find regions between alignments
-    my $saved_sequence = "";
-    my $i = $m_start;
-    my $last_c = "0";
-    my $aln_start = -1;
-    my $aln_stop = -1;
-    foreach my $c (split //, $count_string) {
-      $i++;
-      # Look for the end of an aligned region
-      if ($last_c > 0 && $c eq "0") {
-        $aln_start = $i;
-      }
-      
-      # Look for the beginning of an aligned region, and a minimum length of 50
-      if ($last_c eq "0" && $c > 0 && $aln_start != -1) {
-        $aln_stop = $i;
-        if ($aln_stop - $aln_start >= 50) {
-          $reg_count++;
-          # Get the sequence between two alignments directly from the reference genome
-          capture("${scripts_dir}trim_fasta.pl -i $ref_genome --start $aln_start " .
-                  " -s $m_chr --stop $aln_stop >> $output_file");
-          die "$0: trim_fasta.pl exited unsuccessful" if ( $EXITVAL != 0 );
-          $aln_start = -1;
-        }
-      }
-      $last_c = $c;
-    }    
-  }
-  print "Identified $reg_count candidate insertion/deletion regions.\n";
+  print "Identified $reg_count candidate regions.\n";
 }
 
 ############ Subroutines for internal use by this module ############
