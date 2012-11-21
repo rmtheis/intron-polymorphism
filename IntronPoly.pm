@@ -1368,7 +1368,7 @@ sub assemble_groups {
         while ( my $contig_line = $ifh2->getline ) {
           if ($contig_line =~ m/^>/) {
             $unique++;
-            print $ofh3 ">Group${count}|${unique}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
+            print $ofh3 ">G${count}|${unique}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
           } else {
             print $ofh3 $contig_line;
           }
@@ -1418,7 +1418,7 @@ sub assemble_groups {
       while ( my $contig_line = $ifh2->getline ) {
         if ($contig_line =~ m/^>/) {
           $unique++;
-          print $ofh3 ">Group${count}|${unique}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
+          print $ofh3 ">G${count}|${unique}|$chr|${left_pos}|${last_pos}|" . substr($contig_line, 1);
         } else {
           print $ofh3 $contig_line;
         }
