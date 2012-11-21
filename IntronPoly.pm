@@ -1586,6 +1586,45 @@ sub align_contigs_clustal() {
   print "Identified $reg_count candidate regions.\n";
 }
 
+
+=head2 test_candidates_blast
+
+ Title   : test_candidates_blast
+ Usage   : $project->test_candidates_blast()
+ Function: Check candidate intron sequences against database of known introns using Blast
+ Example : $project->test_candidates_blast( "all_introners", "myreads_candidates.fa" );
+ Returns :
+ Args    : Path to known intron database, multi-Fasta file of intron candidate sequences
+
+=cut
+
+sub test_candidates_blast() {
+  my $self            = shift;
+  my $known_intron_db = shift; # Path to known intron database
+  my $work_dir        = $self->{"work_dir"};
+  my $reads_basename  = $self->{"reads"}->{"basename"};
+  my $candidates_file = shift || "$work_dir/${reads_basename}_candidates.fa";
+  my $ref_genome      = $self->{"ref_genome"}->{"full_pathname"};
+  my $scripts_dir     = $self->{"scripts_dir"};
+  my $index_dir       = $self->{"index_dir"};
+  
+  return if (-z $known_intron_db || !(-e $known_intron_db));
+  print "Checking candidates against known intron database using Blast...\n";
+  
+  unless ( -e "$index_dir/$known_intron_db.nhr"
+    && "$index_dir/$known_intron_db.nin"
+    && "$index_dir/$known_intron_db.nsq" )
+  {
+    # Call formatdb to create the Blast index
+    capture( "formatdb -p F -i $known_intron_db -n $index_dir/$known_intron_db" );
+    die "$0: formatdb exited unsuccessful" if ( $EXITVAL != 0 );
+  }
+  
+  # Compare and save sequences that matched using Blast
+  
+  
+}
+
 ############ Subroutines for internal use by this module ############
 
 # Runs infer_fraglen.pl script to determine median fragment length from aligned read pairs
